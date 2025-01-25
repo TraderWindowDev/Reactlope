@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
 type Post = {
   id: number;
@@ -20,7 +21,7 @@ type PostContextType = {
   posts: Post[];
   loading: boolean;
   createPost: (content: string, imageUrl?: string) => Promise<void>;
-  likePost: (postId: number) => Promise<void>;
+  likePost: (postId: string) => Promise<void>;
   unlikePost: (postId: number) => Promise<void>;
   refreshPosts: () => Promise<void>;
 };
@@ -30,6 +31,7 @@ const PostContext = createContext<PostContextType | undefined>(undefined);
 export function PostProvider({ children }: { children: React.ReactNode }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const { session } = useAuth();
 
   const fetchPosts = async () => {
     try {
@@ -85,29 +87,106 @@ export function PostProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const likePost = async (postId: number) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('No user found');
+  useEffect(() => {
+    fetchPosts();
 
+    // Set up real-time subscription for posts
+    const postsSubscription = supabase
+      .channel('posts_channel')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'posts' 
+        }, 
+        () => {
+          fetchPosts();
+        }
+      )
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'likes' 
+        }, 
+        () => {
+          fetchPosts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      postsSubscription.unsubscribe();
+    };
+  }, [session]);
+
+  const likePost = async (postId: string) => {
+    if (!session?.user?.id) {
+      console.log('No session user');
+      return;
+    }
+
+    try {
+      // Check if already liked
       const { data: existingLike } = await supabase
         .from('likes')
-        .select()
+        .select('*')
         .eq('post_id', postId)
-        .eq('user_id', user.id)
+        .eq('user_id', session.user.id)
         .single();
 
-      if (!existingLike) {
-        const { error } = await supabase.from('likes').insert({
-          post_id: postId,
-          user_id: user.id
-        });
-        if (error) throw error;
+      if (existingLike) {
+        console.log('Post already liked');
+        return;
       }
-      
-      await fetchPosts();
+
+      // Add like to post
+      const { error: likeError } = await supabase
+        .from('likes')
+        .insert({ 
+          post_id: postId, 
+          user_id: session.user.id 
+        });
+
+      if (likeError) {
+        console.error('Like error:', likeError);
+        throw likeError;
+      }
+
+      console.log('Like added successfully');
+
+      // Get post owner
+      const { data: postData, error: postError } = await supabase
+        .from('posts')
+        .select('user_id, profile:profiles(username)')
+        .eq('id', postId)
+        .single();
+
+      if (postError) {
+        console.error('Post fetch error:', postError);
+        throw postError;
+      }
+
+      console.log('Post data:', postData);
+
+      if (postData && postData.user_id !== session.user.id) {
+        // Create notification
+        const { error: notificationError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: postData.user_id,
+            sender_id: session.user.id,
+            type: 'like',
+            content: 'liked your post',
+            related_id: postId
+          });
+
+        if (notificationError) {
+          console.error('Error creating notification:', notificationError);
+        }
+      }
     } catch (error) {
-      console.error('Error liking post:', error);
+      console.error('Error in likePost:', error);
     }
   };
 
@@ -127,10 +206,6 @@ export function PostProvider({ children }: { children: React.ReactNode }) {
       throw error;
     }
   };
-
-  useEffect(() => {
-    fetchPosts();
-  }, []);
 
   return (
     <PostContext.Provider value={{ 

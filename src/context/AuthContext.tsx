@@ -17,22 +17,25 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setLoading(false);
       setIsInitialized(true);
     });
 
     supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) {
-        router.replace('/(tabs)');
-      } else if (isInitialized) {
-        router.replace('/(auth)/login');
+      if (isInitialized) {
+        // Wrap navigation in setTimeout to ensure root layout is mounted
+        setTimeout(() => {
+          if (session) {
+            router.replace('/(tabs)');
+          } else {
+            router.replace('/(auth)/login');
+          }
+        }, 0);
       }
     });
   }, [isInitialized]);
@@ -75,8 +78,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, loading, signIn, signUp, signOut }}>
-      {!loading && children}
+    <AuthContext.Provider value={{
+      session,
+      signUp: (data) => supabase.auth.signUp(data),
+      signIn: (data) => supabase.auth.signInWithPassword(data),
+      signOut: () => supabase.auth.signOut(),
+    }}>
+      {children}
     </AuthContext.Provider>
   );
 }

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
+import { useTheme } from '@/src/context/ThemeContext';
 type PostCardProps = {
   post: {
     id: number;
@@ -23,7 +23,76 @@ type PostCardProps = {
 export default function PostCard({ post, onLike, onUnlike }: PostCardProps) {
   const likesCount = post.likes_count?.length || 0;
   const commentsCount = post.comments_count?.length || 0;
+  const { isDarkMode } = useTheme();
 
+
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+    borderRadius: 10,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  username: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: isDarkMode ? '#fff' : '#000',
+  },
+  time: {
+    fontSize: 12,
+    color: isDarkMode ? '#fff' : '#666',
+  },
+  content: {
+    fontSize: 16,
+    color: isDarkMode ? '#fff' : '#000',
+    marginBottom: 12,
+    lineHeight: 22,
+  },
+  postImage: {
+    width: '100%',
+    height: 300,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  footer: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: isDarkMode ? '#2C2C2C' : '#f0f0f0',
+    paddingTop: 12,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 24,
+    color: isDarkMode ? '#fff' : '#666',
+  },
+  actionText: {
+    marginLeft: 6,
+    color: isDarkMode ? '#fff' : '#666',
+    fontSize: 14,
+  },
+}); 
   return (
     <View style={styles.card}>
       <View style={styles.header}>
@@ -70,67 +139,3 @@ export default function PostCard({ post, onLike, onUnlike }: PostCardProps) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 10,
-    marginHorizontal: 16,
-    marginVertical: 8,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  username: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  time: {
-    fontSize: 12,
-    color: '#666',
-  },
-  content: {
-    fontSize: 16,
-    marginBottom: 12,
-    lineHeight: 22,
-  },
-  postImage: {
-    width: '100%',
-    height: 300,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  footer: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 12,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 24,
-  },
-  actionText: {
-    marginLeft: 6,
-    color: '#666',
-    fontSize: 14,
-  },
-}); 

@@ -1,9 +1,12 @@
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useColorScheme, View } from 'react-native';
+import {useTheme} from '@/src/context/ThemeContext';
 
 export default function TrainingLayout() {
   const router = useRouter();
+  const { isDarkMode } = useTheme();
 
   return (
     <Stack>
@@ -16,42 +19,54 @@ export default function TrainingLayout() {
             <Ionicons 
               name="arrow-back" 
               size={24} 
-              color="#007AFF"
+              color={isDarkMode ? '#fff' : '#000'}
               style={{ marginLeft: 16 }}
-              onPress={() => router.navigate('training')}
+              onPress={() => router.navigate('/(tabs)/training')}
             />
           ),
+          headerStyle: {
+            backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+          },
         }} 
       />
       <Stack.Screen 
         name="plan-details" 
         options={{ 
-          title: 'Plan Details',
+          title: 'Treningsprogram',
+          headerTintColor: isDarkMode ? '#fff' : '#000',
           headerLeft: () => (
             <Ionicons 
-              name="arrow-back" 
-              size={24} 
-              color="#007AFF"
-              style={{ marginLeft: 16 }}
-              onPress={() => router.navigate('training')}
+                name="arrow-back" 
+                size={24} 
+                color={isDarkMode ? '#fff' : '#000'}
+                style={{ marginLeft: 16}}
+                onPress={() => router.navigate('/(tabs)/training')}
             />
+
           ),
+          headerStyle: {
+             backgroundColor: isDarkMode ? '#1E1E1E' : '#fff'
+          },
         }} 
       />
       <Stack.Screen 
         name="edit-plan" 
         options={{ 
-          title: 'Edit Training Plan',
+          title: 'Rediger treningsprogram',
+          headerTintColor: isDarkMode ? '#fff' : '#000',
           presentation: 'modal',
           headerLeft: () => (
             <Ionicons 
               name="arrow-back" 
               size={24} 
-              color="#007AFF"
+              color={isDarkMode ? '#fff' : '#007AFF'}
               style={{ marginLeft: 16 }}
-              onPress={() => router.navigate('training')}
+              onPress={() => router.navigate('/(tabs)/training')}
             />
           ),
+          headerStyle: {
+            backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+          },
         }} 
       />
     </Stack>

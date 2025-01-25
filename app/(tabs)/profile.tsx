@@ -5,6 +5,7 @@ import { supabase } from '@/src/lib/supabase';
 import { Button } from '../../components/Button';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useTheme } from '@/src/context/ThemeContext';
 
 type Profile = {
   username: string;
@@ -26,6 +27,7 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const { isDarkMode } = useTheme();
 
   useEffect(() => {
     fetchProfile();
@@ -91,20 +93,109 @@ export default function ProfileScreen() {
     }
   };
 
-  function CustomHeader() {
-    return (
-      <View style={styles.customHeader}>
-        <Text style={styles.customHeaderTitle}>Profile</Text>
-        <TouchableOpacity 
-          style={styles.settingsButton}
-          onPress={() => router.push('/(settings)/settings')}
-        >
-          <Ionicons name="settings-outline" size={24} color="#000" />
-        </TouchableOpacity>
-      </View>
-    );
-  }
 
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDarkMode ? '#121212' : '#fff',
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: isDarkMode ? '#121212' : '#fff',
+    },
+    
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      paddingBottom: 10,
+      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+      borderBottomWidth: 1,
+      borderTopWidth: 1,
+      borderTopColor: isDarkMode ? '#2C2C2C' : '#eee',
+      borderBottomColor: isDarkMode ? '#2C2C2C' : '#eee',
+    },
+    avatar: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+    },
+    stats: {
+      flex: 1,
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      marginLeft: 16,
+    },
+    statItem: {
+      alignItems: 'center',
+    },
+    statNumber: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: isDarkMode ? '#fff' : '#000',
+    },
+    statLabel: {
+      fontSize: 12,
+      color: isDarkMode ? '#999' : '#666',
+    },
+    username: {
+      fontSize: 16,
+      paddingTop: 10,
+      fontWeight: 'bold',
+      color: isDarkMode ? '#fff' : '#000',
+      paddingHorizontal: 16,
+      marginBottom: 4,
+    },
+    bio: {
+      fontSize: 14,
+      color: isDarkMode ? '#999' : '#666',
+      paddingHorizontal: 16,
+      marginBottom: 16,
+    },
+    editButton: {
+      marginHorizontal: 16,
+      marginBottom: 16,
+      backgroundColor: isDarkMode ? '#0047AB' : '#0047AB',
+    },
+    postThumbnail: {
+      flex: 1/3,
+      aspectRatio: 1,
+    },
+    postImage: {
+      flex: 1,
+      margin: 1,
+    },
+    emptyContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 32,
+    },
+    emptyTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      marginTop: 16,
+      marginBottom: 8,
+      color: isDarkMode ? '#fff' : '#000',
+    },
+    emptyDescription: {
+      fontSize: 16,
+      color: isDarkMode ? '#999' : '#666',
+      textAlign: 'center',
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: isDarkMode ? '#fff' : '#000',
+    },
+    settingsButton: {
+      padding: 8,
+    },
+  });
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -112,10 +203,8 @@ export default function ProfileScreen() {
       </View>
     );
   }
-
   return (
     <View style={styles.container}>
-      <CustomHeader />
 
       <View style={styles.header}>
         <Image
@@ -125,15 +214,15 @@ export default function ProfileScreen() {
         <View style={styles.stats}>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{posts.length}</Text>
-            <Text style={styles.statLabel}>Posts</Text>
+            <Text style={styles.statLabel}>Innlegg</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{profile?.followers_count || 0}</Text>
-            <Text style={styles.statLabel}>Followers</Text>
+            <Text style={styles.statLabel}>Følgere</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{profile?.following_count || 0}</Text>
-            <Text style={styles.statLabel}>Following</Text>
+            <Text style={styles.statLabel}>Følger</Text>
           </View>
         </View>
       </View>
@@ -142,18 +231,18 @@ export default function ProfileScreen() {
       <Text style={styles.bio}>{profile?.bio || 'No bio yet'}</Text>
 
       <Button
-        title="Edit Profile"
-        onPress={() => {/* TODO: Navigate to edit profile */}}
-        variant="outline"
+        title="Rediger profil"
+        onPress={() => router.push('/(profile)/editprofile')}
+        variant="primary"
         style={styles.editButton}
       />
 
       {posts.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="images-outline" size={64} color="#666" />
-          <Text style={styles.emptyTitle}>No Posts Yet</Text>
+          <Text style={styles.emptyTitle}>Ingen innlegg</Text>
           <Text style={styles.emptyDescription}>
-            Share your first photo or video!
+            Del ditt første bilde!
           </Text>
         </View>
       ) : (
@@ -175,112 +264,3 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  customHeader: {
-    paddingTop: 60,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-
-  },
-  customHeaderTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    alignSelf: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 10,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
-  stats: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginLeft: 16,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-  },
-  username: {
-    fontSize: 16,
-    paddingTop: 10,
-    fontWeight: 'bold',
-    paddingHorizontal: 16,
-    marginBottom: 4,
-  },
-  bio: {
-    fontSize: 14,
-    color: '#666',
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  editButton: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  postThumbnail: {
-    flex: 1/3,
-    aspectRatio: 1,
-  },
-  postImage: {
-    flex: 1,
-    margin: 1,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyDescription: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  settingsButton: {
-    padding: 8,
-  },
-});

@@ -1,43 +1,45 @@
-import { View, StyleSheet, ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, ViewStyle } from 'react-native';
 import { theme } from '@/src/theme/theme';
+import { useTheme } from '@/src/context/ThemeContext';
 
 interface CardProps {
   children: React.ReactNode;
   style?: ViewStyle;
   variant?: 'elevated' | 'outlined' | 'flat';
+  onPress?: () => void;
 }
 
-export function Card({ children, style, variant = 'elevated' }: CardProps) {
+export function Card({ children, style, variant = 'elevated', onPress }: CardProps) {
+  const { isDarkMode } = useTheme();
+  
+  const styles = StyleSheet.create({
+    card: {
+      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+      borderRadius: theme.borderRadius.md,
+      padding: theme.spacing.md,
+    },
+    
+    outlined: {
+      borderWidth: 1,
+      borderColor: isDarkMode ? '#fff' : theme.colors.surface,
+    },
+    pressed: {
+      opacity: 0.9,
+      transform: [{ scale: 0.98 }],
+    },
+  });
   return (
-    <View style={[
-      styles.card,
-      variant === 'elevated' && styles.elevated,
-      variant === 'outlined' && styles.outlined,
-      style
-    ]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.card,
+        variant === 'elevated' && styles.elevated,
+        variant === 'outlined' && styles.outlined,
+        pressed && styles.pressed,
+        style
+      ]}
+    >
       {children}
-    </View>
+    </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: theme.colors.background,
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.md,
-  },
-  elevated: {
-    shadowColor: theme.colors.text,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  outlined: {
-    borderWidth: 1,
-    borderColor: theme.colors.surface,
-  },
-});

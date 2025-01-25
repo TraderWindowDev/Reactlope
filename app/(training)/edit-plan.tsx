@@ -1,53 +1,72 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Modal, TextInput } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Button } from '../../components/Button';
-import { supabase } from '@/src/lib/supabase';
 import { Card } from '../../components/Card';
+import { supabase } from '@/src/lib/supabase';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '@/src/context/AuthContext';
+const WEEKDAYS = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
 
 type Exercise = {
-  id: number;
+  id?: number;
   name: string;
-  description: string;
-  sets: string;
-  reps: string;
-  duration_minutes: string;
-  day_of_week: number;
+  sets: number;
+  reps: number;
+  duration_minutes: number;
   week_number: number;
+  day_number: number;
   notes: string;
+  plan_id: number;
 };
 
 export default function EditPlanScreen() {
   const { planId } = useLocalSearchParams();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [difficulty, setDifficulty] = useState('');
-  const [durationWeeks, setDurationWeeks] = useState('');
-  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [userName, setUserName] = useState<string>('');
+  const [expandedWeek, setExpandedWeek] = useState<number | null>(1);
+  const [schedule, setSchedule] = useState<Record<number, Record<number, Exercise[]>>>({});
   const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const [exerciseDetails, setExerciseDetails] = useState({
+    name: '',
+    sets: '',
+    reps: '',
+    duration_minutes: '',
+    notes: ''
+  });
+  const [selectedWeek, setSelectedWeek] = useState<number>(1);
+  const [selectedDay, setSelectedDay] = useState<number>(1);
 
   useEffect(() => {
     fetchPlanDetails();
+    fetchUserDetails();
   }, [planId]);
 
   const fetchPlanDetails = async () => {
     try {
-      const { data: plan, error: planError } = await supabase
-        .from('training_plans')
-        .select(`
-          *,
-          training_plan_exercises (*)
-        `)
-        .eq('id', planId)
-        .single();
+      const { data: exercises, error } = await supabase
+        .from('training_plan_exercises')
+        .select('*')
+        .eq('plan_id', planId);
 
-      if (planError) throw planError;
+      if (error) throw error;
 
-      setTitle(plan.title);
-      setDescription(plan.description);
-      setDifficulty(plan.difficulty);
-      setDurationWeeks(plan.duration_weeks.toString());
-      setExercises(plan.training_plan_exercises || []);
+      // Convert exercises to schedule format
+      const newSchedule: Record<number, Record<number, Exercise[]>> = {};
+      exercises?.forEach((exercise: Exercise) => {
+        const weekNum = exercise.week_number;
+        const dayNum = exercise.day_number;
+        
+        if (!newSchedule[weekNum]) {
+          newSchedule[weekNum] = {};
+        }
+        if (!newSchedule[weekNum][dayNum]) {
+          newSchedule[weekNum][dayNum] = [];
+        }
+        newSchedule[weekNum][dayNum].push(exercise);
+      });
+      setSchedule(newSchedule);
     } catch (error) {
       console.error('Error fetching plan details:', error);
       alert('Failed to load plan details');
@@ -56,101 +75,237 @@ export default function EditPlanScreen() {
     }
   };
 
-  const handleUpdatePlan = async () => {
+  const fetchUserDetails = async () => {
     try {
-      setLoading(true);
+      const { data, error } = await supabase
+        .from('user_training_plans')
+        .select(`
+          user_id,
+          profiles!user_training_plans_user_id_fkey (
+            username
+          )
+        `)
+        .eq('plan_id', planId)
+        .single();
 
-      // Update training plan
-      const { error: planError } = await supabase
-        .from('training_plans')
-        .update({
-          title,
-          description,
-          difficulty: difficulty.toLowerCase(),
-          duration_weeks: parseInt(durationWeeks)
-        })
-        .eq('id', planId);
+      if (error) throw error;
+      
+      setUserName(data?.profiles?.username || 'bruker');
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+    }
+  };
 
-      if (planError) throw planError;
+  const handleDayPress = (weekNumber: number, dayNumber: number) => {
+    setSelectedWeek(weekNumber);
+    setSelectedDay(dayNumber);
+    setSelectedExercise(null);
+    setExerciseDetails({
+      name: '',
+      sets: '',
+      reps: '',
+      duration_minutes: '',
+      notes: ''
+    });
+    setModalVisible(true);
+  };
 
-      // Update exercises
-      for (const exercise of exercises) {
-        const { error: exerciseError } = await supabase
-          .from('training_plan_exercises')
-          .upsert({
-            id: exercise.id,
-            plan_id: planId,
-            name: exercise.name,
-            description: exercise.description,
-            sets: parseInt(exercise.sets),
-            reps: parseInt(exercise.reps),
-            duration_minutes: parseInt(exercise.duration_minutes) || 0,
-            day_of_week: exercise.day_of_week,
-            week_number: exercise.week_number,
-            notes: exercise.notes
-          });
+  const handleExercisePress = (exercise: Exercise) => {
+    setSelectedExercise(exercise);
+    setExerciseDetails({
+      name: exercise.name,
+      sets: exercise.sets.toString(),
+      reps: exercise.reps.toString(),
+      duration_minutes: exercise.duration_minutes.toString(),
+      notes: exercise.notes
+    });
+    setModalVisible(true);
+  };
 
-        if (exerciseError) throw exerciseError;
+  const handleSaveExercise = async () => {
+    try {
+      if (!exerciseDetails.name || !exerciseDetails.sets || !exerciseDetails.reps) {
+        alert('Please fill in exercise name, sets, and reps');
+        return;
       }
 
-      router.back();
+      const exerciseData = {
+        name: exerciseDetails.name,
+        sets: parseInt(exerciseDetails.sets),
+        reps: parseInt(exerciseDetails.reps),
+        duration_minutes: parseInt(exerciseDetails.duration_minutes) || 0,
+        notes: exerciseDetails.notes,
+        plan_id: planId,
+        week_number: selectedWeek,
+        day_number: selectedDay
+      };
+
+      if (selectedExercise?.id) {
+        // Update existing exercise
+        const { error } = await supabase
+          .from('training_plan_exercises')
+          .update(exerciseData)
+          .eq('id', selectedExercise.id);
+
+        if (error) throw error;
+      } else {
+        // Create new exercise
+        const { error } = await supabase
+          .from('training_plan_exercises')
+          .insert([exerciseData]);
+
+        if (error) throw error;
+      }
+
+      setModalVisible(false);
+      fetchPlanDetails(); // Refresh the schedule
     } catch (error) {
-      console.error('Error updating plan:', error);
-      alert('Failed to update training plan');
-    } finally {
-      setLoading(false);
+      console.error('Error saving exercise:', error);
+      alert('Failed to save exercise');
     }
   };
 
   return (
     <ScrollView style={styles.container}>
-      <Card style={styles.card}>
-        <Text style={styles.label}>Title</Text>
-        <TextInput
-          style={styles.input}
-          value={title}
-          onChangeText={setTitle}
-          placeholder="Plan Title"
-        />
+      <Text style={styles.title}>Registrer trening</Text>
+      <Text style={styles.subtitle}>Registrer treningsplanen til {userName}!</Text>
 
-        <Text style={styles.label}>Description</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Plan Description"
-          multiline
-        />
+      {[1, 2, 3, 4].map((weekNumber) => (
+        <Pressable
+          key={weekNumber}
+          style={styles.weekContainer}
+          onPress={() => setExpandedWeek(expandedWeek === weekNumber ? null : weekNumber)}
+        >
+          <View style={styles.weekCard}>
+            <View style={styles.weekHeader}>
+              <Text style={styles.weekTitle}> Uke {weekNumber}</Text>
+              <Ionicons 
+                name={expandedWeek === weekNumber ? "chevron-up" : "chevron-down"} 
+                size={24} 
+                color="#000" 
+              />
+            </View>
 
-        <Text style={styles.label}>Difficulty</Text>
-        <View style={styles.difficultyButtons}>
-          {['beginner', 'intermediate', 'advanced'].map((level) => (
+            {expandedWeek === weekNumber && (
+              <View style={styles.weekContent}>
+                {WEEKDAYS.map((day, dayIndex) => {
+                  const dayExercises = schedule[weekNumber]?.[dayIndex + 1] || [];
+                  return (
+                    <Pressable
+                      key={day}
+                      style={styles.dayRow}
+                      onPress={() => handleDayPress(weekNumber, dayIndex + 1)}
+                    >
+                      <Text style={styles.dayText}>{day}</Text>
+                      <View style={styles.exercisesContainer}>
+                        {dayExercises.map((exercise) => (
+                          <Pressable
+                            key={exercise.id}
+                            style={styles.exerciseItem}
+                            onPress={() => handleExercisePress(exercise)}
+                          >
+                            <Text style={styles.exerciseName}>{exercise.name}</Text>
+                            <Text style={styles.exerciseDetails}>
+                              {exercise.sets} sets × {exercise.reps} reps
+                            </Text>
+                          </Pressable>
+                        ))}
+                        <Ionicons 
+                          name="add-circle-outline" 
+                          size={24} 
+                          color="#000" 
+                        />
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        </Pressable>
+      ))}
+
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {selectedExercise ? 'Endre trening' : 'Legg til trening'}
+              </Text>
+              <Pressable onPress={() => setModalVisible(false)}>
+                <Text style={styles.closeButton}>×</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Trening</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., Push-ups"
+                value={exerciseDetails.name}
+                onChangeText={(text) => setExerciseDetails({...exerciseDetails, name: text})}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Set</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., 3"
+                value={exerciseDetails.sets}
+                onChangeText={(text) => setExerciseDetails({...exerciseDetails, sets: text})}
+                keyboardType="numeric"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Rep</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., 12"
+                value={exerciseDetails.reps}
+                onChangeText={(text) => setExerciseDetails({...exerciseDetails, reps: text})}
+                keyboardType="numeric"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Varighet (minutter)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., 30"
+                value={exerciseDetails.duration_minutes}
+                onChangeText={(text) => setExerciseDetails({...exerciseDetails, duration_minutes: text})}
+                keyboardType="numeric"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Kommentar</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Tilføy kommentar..."
+                multiline
+                numberOfLines={4}
+                value={exerciseDetails.notes}
+                onChangeText={(text) => setExerciseDetails({...exerciseDetails, notes: text})}
+              />
+            </View>
+
             <Button
-              key={level}
-              title={level.charAt(0).toUpperCase() + level.slice(1)}
-              onPress={() => setDifficulty(level)}
-              variant={difficulty === level ? 'primary' : 'outline'}
-              style={styles.difficultyButton}
+              title={selectedExercise ? 'Oppdater trening' : 'Legg til trening'}
+              onPress={handleSaveExercise}
+              variant="primary"
+              style={styles.saveButton}
             />
-          ))}
+          </View>
         </View>
-
-        <Text style={styles.label}>Duration (weeks)</Text>
-        <TextInput
-          style={styles.input}
-          value={durationWeeks}
-          onChangeText={setDurationWeeks}
-          keyboardType="numeric"
-          placeholder="Duration in weeks"
-        />
-      </Card>
-
-      <Button
-        title={loading ? "Updating..." : "Update Plan"}
-        onPress={handleUpdatePlan}
-        disabled={loading}
-        style={styles.updateButton}
-      />
+      </Modal>
     </ScrollView>
   );
 }
@@ -158,17 +313,112 @@ export default function EditPlanScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f5f5f5',
   },
-  card: {
-    margin: 16,
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    marginHorizontal: 16,
+    marginTop: 16,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 24,
+    marginHorizontal: 16,
+  },
+  weekContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  weekCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+
+    elevation: 3,
     padding: 16,
+  },
+  weekHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  weekTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  weekContent: {
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  dayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  dayText: {
+    width: 100,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  exercisesContainer: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  exerciseItem: {
+    marginBottom: 8,
+    alignItems: 'flex-end',
+  },
+  exerciseName: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  exerciseDetails: {
+    fontSize: 12,
+    color: '#666',
+  },
+  addIcon: {
+    marginTop: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    width: '100%',
+    maxWidth: 500,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  closeButton: {
+    fontSize: 24,
+    fontWeight: '400',
+  },
+  formGroup: {
+    marginBottom: 16,
   },
   label: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
     marginBottom: 8,
-    color: '#666',
   },
   input: {
     borderWidth: 1,
@@ -176,22 +426,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    marginBottom: 16,
   },
   textArea: {
     height: 100,
     textAlignVertical: 'top',
   },
-  difficultyButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  difficultyButton: {
-    flex: 1,
-    marginHorizontal: 4,
-  },
-  updateButton: {
-    margin: 16,
+  saveButton: {
+    marginTop: 20,
+    backgroundColor: '#7B61FF',
   },
 }); 

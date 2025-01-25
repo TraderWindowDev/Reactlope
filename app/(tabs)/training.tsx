@@ -6,7 +6,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { Ionicons } from '@expo/vector-icons';
-
+import { useTheme } from '@/src/context/ThemeContext';
 
   type Profile = {
     id: string;
@@ -24,6 +24,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 export default function TrainingScreen() {
   const { session } = useAuth();
+  const { isDarkMode } = useTheme();
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
   const [users, setUsers] = useState<Profile[]>([]);
   const [plans, setPlans] = useState<TrainingPlan[]>([]);
@@ -45,7 +46,10 @@ export default function TrainingScreen() {
 
   const fetchProfile = async () => {
     try {
-      if (!session?.user) return;
+      if (!session?.user.id){
+        console.log('No user id');
+        return;
+      }
 
       const { data, error } = await supabase
         .from('profiles')
@@ -103,7 +107,7 @@ export default function TrainingScreen() {
             id,
             title,
             description,
-            difficulty,
+            
             duration_weeks,
             coach:profiles!coach_id (username)
           )
@@ -133,13 +137,120 @@ export default function TrainingScreen() {
       params: { planId }
     });
   };
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDarkMode ? '#121212' : '#f5f5f5',
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      margin: 16,
+      color: isDarkMode ? '#fff' : '#000',
+    },
+    loading: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    userCard: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+      alignItems: 'center',
+      padding: 16,
+      marginHorizontal: 16,
+      marginBottom: 8,
+    },
+    userInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    avatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      marginRight: 12,
+    },
+    username: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDarkMode ? '#fff' : '#000',
+    },
+    planCard: {
+      margin: 16,
+      padding: 16,
+    },
+    planTitle: {
+      fontSize: 18,
+      color: isDarkMode ? '#fff' : '#000',
+      fontWeight: 'bold',
+      marginBottom: 8,
+    },
+    planDescription: {
+      fontSize: 14,
+      color: isDarkMode ? '#fff' : '#000',
+      marginBottom: 12,
+    },
+    planMeta: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    planInfo: {
+      fontSize: 14,
+      color: isDarkMode ? '#fff' : '#000',
+    },
+    coachName: {
+      fontSize: 14,
+      color: isDarkMode ? '#fff' : '#000',
+    },
+    emptyContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 32,
+    },
+    emptyTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      marginTop: 16,
+      marginBottom: 8,
+      textAlign: 'center',
+    },
+    emptyDescription: {
+      fontSize: 16,
+      color: '#fff',
+      textAlign: 'center',
+      lineHeight: 24,
+    },
+    emptyText: {
+      fontSize: 16,
+      color: '#fff',
+      textAlign: 'center',
+    },
+    
+    editButton: {
+      flex: 1,
+      marginRight: 8,
+      backgroundColor: isDarkMode ? '#0047AB' : '#0047AB',
+    },
+    viewButton: {
+      flex: 1,
+      marginTop: 20,
+      marginRight: 8,
 
+      backgroundColor: isDarkMode ? '#0047AB' : '#0047AB',
+    },
+
+  });
   // Coach view with users list
   if (userProfile?.role === 'coach') {
     return (
       <View style={styles.container}>
+       
         {loading ? (
-          <ActivityIndicator size="large" style={styles.loading} />
+          <ActivityIndicator size="large" style={styles.loading} color="#0047AB"/>
         ) : (
           <FlatList
             data={users}
@@ -155,15 +266,14 @@ export default function TrainingScreen() {
                 {item.user_training_plans?.[0]?.plan_id ? (
                   <View style={styles.buttonGroup}>
                     <Button
-                      title="Edit Plan"
+                      title="Rediger"
                       onPress={() => handleEditPlan(item.user_training_plans[0].plan_id)}
-                      variant="primary"
-                      style={styles.editButton}
+                      style={styles.editButton} 
                     />
                   </View>
                 ) : (
                   <Button
-                    title="Create Plan"
+                    title="Opprett Plan"
                     onPress={() => handleUserPress(item.id)}
                     variant="primary"
                   />
@@ -188,6 +298,7 @@ export default function TrainingScreen() {
   // User view with their training plan
   return (
     <View style={styles.container}>
+  
       {loading ? (
         <ActivityIndicator size="large" style={styles.loading} />
       ) : plans.length === 0 ? (
@@ -210,26 +321,24 @@ export default function TrainingScreen() {
                 params: { planId: item.id }
               })}
             >
-              <Text style={styles.planTitle}>{item.title}</Text>
+              <Text style={styles.planTitle}>Min treningsplan</Text>
               <Text style={styles.planDescription}>{item.description}</Text>
               <View style={styles.planMeta}>
+                
                 <Text style={styles.planInfo}>
-                  Difficulty: {item.difficulty}
-                </Text>
-                <Text style={styles.planInfo}>
-                  {item.duration_weeks} weeks
+                  {item.duration_weeks} uker
                 </Text>
               </View>
               <Text style={styles.coachName}>
                 Coach: {item.coach?.username || 'Unknown'}
               </Text>
               <Button
-                title="View Details"
+                title="Se detaljer"
                 onPress={() => router.push({
                   pathname: '/(training)/plan-details',
                   params: { planId: item.id }
                 })}
-                variant="primary"
+
                 style={styles.viewButton}
               />
             </Card>
@@ -247,102 +356,3 @@ export default function TrainingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    paddingTop: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    margin: 16,
-  },
-  loading: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  userCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 8,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  username: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  planCard: {
-    margin: 16,
-    padding: 16,
-  },
-  planTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  planDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-  },
-  planMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  planInfo: {
-    fontSize: 14,
-    color: '#444',
-  },
-  coachName: {
-    fontSize: 14,
-    color: '#666',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emptyDescription: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-  },
-  
-  editButton: {
-    flex: 1,
-    marginRight: 8,
-  },
-  viewButton: {
-    flex: 1,
-    marginRight: 8,
-  },
-});

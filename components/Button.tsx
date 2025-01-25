@@ -1,5 +1,6 @@
 import { Pressable, Text, StyleSheet, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
 import { theme } from '@/src/theme/theme';
+import { useTheme } from '@/src/context/ThemeContext';
 
 interface ButtonProps {
   onPress: () => void;
@@ -22,6 +23,7 @@ export function Button({
   style,
   textStyle,
 }: ButtonProps) {
+  const { isDarkMode } = useTheme();
   const getVariantStyle = () => {
     switch (variant) {
       case 'secondary':
@@ -43,6 +45,51 @@ export function Button({
         return styles.mediumButton;
     }
   };
+
+  const styles = StyleSheet.create({
+    button: {
+      borderRadius: theme.borderRadius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDarkMode ? '#fff' : theme.colors.primary,
+    },
+    primaryButton: {
+      backgroundColor: isDarkMode ? '#fff' : theme.colors.primary,
+    },
+    secondaryButton: {
+      backgroundColor: isDarkMode ? '#fff' : theme.colors.secondary,
+    },
+    outlineButton: {
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      borderColor: isDarkMode ? '#fff' : theme.colors.primary,
+    },
+    smallButton: {
+      paddingVertical: theme.spacing.xs,
+      paddingHorizontal: theme.spacing.md,
+    },
+    mediumButton: {
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.lg,
+    },
+    largeButton: {
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.xl,
+    },
+    text: {
+      color: isDarkMode ? '#fff' : theme.colors.background,
+      ...theme.typography.body,
+    },
+    outlineText: {
+      color: isDarkMode ? '#fff' : theme.colors.primary,
+    },
+    disabledButton: {
+      opacity: 0.5,
+    },
+    disabledText: {
+      opacity: 0.5,
+    },
+  });
 
   return (
     <Pressable
@@ -74,47 +121,3 @@ export function Button({
   );
 }
 
-const styles = StyleSheet.create({
-  button: {
-    borderRadius: theme.borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-
-  },
-  primaryButton: {
-    backgroundColor: theme.colors.primary,
-  },
-  secondaryButton: {
-    backgroundColor: theme.colors.secondary,
-  },
-  outlineButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: theme.colors.primary,
-  },
-  smallButton: {
-    paddingVertical: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.md,
-  },
-  mediumButton: {
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.lg,
-  },
-  largeButton: {
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.xl,
-  },
-  text: {
-    color: theme.colors.background,
-    ...theme.typography.body,
-  },
-  outlineText: {
-    color: theme.colors.primary,
-  },
-  disabledButton: {
-    opacity: 0.5,
-  },
-  disabledText: {
-    opacity: 0.5,
-  },
-});
