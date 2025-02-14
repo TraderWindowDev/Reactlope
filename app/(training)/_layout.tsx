@@ -13,7 +13,8 @@ export default function TrainingLayout() {
       <Stack.Screen 
         name="create-plan" 
         options={{ 
-          title: 'Create Training Plan',
+          title: 'Lag et treningsprogram',
+          headerTintColor: isDarkMode ? '#fff' : '#000',
           presentation: 'modal',
           headerLeft: () => (
             <Ionicons 
@@ -60,6 +61,26 @@ export default function TrainingLayout() {
               name="arrow-back" 
               size={24} 
               color={isDarkMode ? '#fff' : '#007AFF'}
+              style={{ marginLeft: 16 }}
+              onPress={() => router.navigate('/(tabs)/training')}
+            />
+          ),
+          headerStyle: {
+            backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+          },
+        }} 
+      />
+      <Stack.Screen 
+        name="manage-templates" 
+        options={{ 
+          title: 'Administrer maler',
+          headerTintColor: isDarkMode ? '#fff' : '#000',
+          presentation: 'modal',
+          headerLeft: () => (
+            <Ionicons 
+              name="arrow-back" 
+              size={24} 
+              color={isDarkMode ? '#fff' : '#000'}
               style={{ marginLeft: 16 }}
               onPress={() => router.navigate('/(tabs)/training')}
             />

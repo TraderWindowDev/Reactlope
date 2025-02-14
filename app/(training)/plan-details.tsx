@@ -1,34 +1,37 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Platform, Pressable, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Platform, Pressable, Modal, TextInput, Linking, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '@/src/lib/supabase';
-import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { useTheme } from '@/src/context/ThemeContext';
+
+type UserComment = {
+  id: string;
+  comment: string;
+  created_at: string;
+  user_id: string;
+  strava_link?: string;
+};
+
 type Exercise = {
-  id?: number;
+  id: number;
   name: string;
-  description: string;
+  notes: string;
   sets: number;
   reps: number;
   duration_minutes: number;
   week_number: number;
   day_number: number;
-  notes: string;
-  difficulty: string;
   completed: boolean;
-  plan_id: number;
-};
-
-type RoutineProgress = {
-  id: number;
-  current_week: number;
-  completed_exercises: number[];
-  status: 'active' | 'completed';
+  completed_at: string | null;
+  comments: UserComment[];
+  strava_link?: string;
+  coach_comments?: UserComment[];
+  type: string;
 };
 
 const WEEKDAYS = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
@@ -38,7 +41,6 @@ export default function PlanDetailsScreen() {
   const { isDarkMode } = useTheme();
   const [plan, setPlan] = useState<any>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [routineProgress, setRoutineProgress] = useState<RoutineProgress | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(false);
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
@@ -50,10 +52,12 @@ export default function PlanDetailsScreen() {
   const [selectedExercises, setSelectedExercises] = useState<Exercise[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedDayTitle, setSelectedDayTitle] = useState('');
+  const [commentText, setCommentText] = useState('');
+  const [stravaLink, setStravaLink] = useState('');
+  const [editingExerciseId, setEditingExerciseId] = useState<number | null>(null);
   
   useEffect(() => {
     fetchPlanDetails();
-    fetchRoutineProgress();
   }, [planId]);
 
   const fetchPlanDetails = async () => {
@@ -102,24 +106,6 @@ export default function PlanDetailsScreen() {
     }
   };
 
-  const fetchRoutineProgress = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data, error } = await supabase
-        .from('routine_progress')
-        .select('*')
-        .eq('user_id', user?.id)
-        .eq('plan_id', planId)
-        .eq('status', 'active')
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
-      setRoutineProgress(data || null);
-    } catch (error) {
-      console.error('Error fetching routine progress:', error);
-    }
-  };
-
   const getCurrentWeek = () => {
     if (!plan?.start_date) return 1;
     const startDate = new Date(plan.start_date);
@@ -129,55 +115,21 @@ export default function PlanDetailsScreen() {
     return Math.ceil(diffDays / 7);
   };
 
-  const handleExerciseComplete = async (exerciseId: number) => {
+  const handleExerciseComplete = async (exercise: Exercise) => {
     try {
-      setLoadingProgress(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      let progress = routineProgress;
-      if (!progress) {
-        // Create new routine progress if it doesn't exist
-        const { data, error } = await supabase
-          .from('routine_progress')
-          .insert({
-            user_id: user?.id,
-            plan_id: planId,
-            current_week: getCurrentWeek(),
-            completed_exercises: [exerciseId],
-            status: 'active'
-          })
-          .select()
-          .single();
+      const { error } = await supabase
+        .from('training_plan_exercises')
+        .update({ 
+          completed: !exercise.completed,
+          completed_at: !exercise.completed ? new Date().toISOString() : null
+        })
+        .eq('id', exercise.id);
 
-        if (error) throw error;
-        progress = data;
-      } else {
-        // Update existing routine progress
-        const completed = progress.completed_exercises || [];
-        const newCompleted = completed.includes(exerciseId)
-          ? completed.filter(id => id !== exerciseId)
-          : [...completed, exerciseId];
-
-        const { data, error } = await supabase
-          .from('routine_progress')
-          .update({
-            completed_exercises: newCompleted,
-            current_week: getCurrentWeek()
-          })
-          .eq('id', progress.id)
-          .select()
-          .single();
-
-        if (error) throw error;
-        progress = data;
-      }
-
-      setRoutineProgress(progress);
+      if (error) throw error;
+      fetchPlanDetails();
     } catch (error) {
-      console.error('Error updating exercise progress:', error);
-      alert('Failed to update progress');
-    } finally {
-      setLoadingProgress(false);
+      console.error('Error updating exercise:', error);
+      alert('Failed to update exercise');
     }
   };
 
@@ -196,9 +148,9 @@ export default function PlanDetailsScreen() {
     );
   };
 
-
   const isExerciseCompleted = (exerciseId: number) => {
-    return routineProgress?.completed_exercises?.includes(exerciseId) || false;
+    const exercise = exercises.find(ex => ex.id === exerciseId);
+    return exercise?.completed || false;
   };
 
   const handleDayPress = (weekNumber: number, dayIndex: number) => {
@@ -219,12 +171,21 @@ export default function PlanDetailsScreen() {
   const getDayStatus = (weekNumber: number, dayIndex: number) => {
     const dayExercises = exercises.filter(ex => 
       ex.week_number === weekNumber && 
-      ex.day_number === dayIndex + 1
+      ex.day_number === dayIndex + 1 &&
+      ex.type !== 'rest'  // Exclude rest exercises
     );
     
-    if (dayExercises.length === 0) return null;
+    if (dayExercises.length === 0) {
+      // Check if it's a rest day
+      const isRestDay = exercises.some(ex => 
+        ex.week_number === weekNumber && 
+        ex.day_number === dayIndex + 1 &&
+        ex.type === 'rest'
+      );
+      return isRestDay ? 'rest' : null;
+    }
     
-    const completedCount = dayExercises.filter(ex => isExerciseCompleted(ex.id)).length;
+    const completedCount = dayExercises.filter(ex => ex.completed).length;
     
     if (completedCount === dayExercises.length) {
       return 'completed';
@@ -232,46 +193,78 @@ export default function PlanDetailsScreen() {
     return 'ongoing';
   };
 
-  const handleExerciseCompletion = async (exercise: Exercise) => {
+  const handleExerciseCompletion = async (exerciseId: number) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No user found');
+
+      // Create the comment object with explicit structure
+      const commentObject = [{
+        id: generateUUID(),
+        comment: commentText.trim(),
+        created_at: new Date().toISOString(),
+        user_id: user.id,
+        strava_link: stravaLink.trim() || undefined
+      }];
+
+      console.log('Saving comment:', JSON.stringify(commentObject, null, 2));
+
       const { error } = await supabase
         .from('training_plan_exercises')
-        .update({ completed: !exercise.completed })
-        .eq('id', exercise.id);
+        .update({ 
+          comments: commentObject,
+          strava_link: stravaLink.trim() || null
+        })
+        .eq('id', exerciseId);
 
-      if (error) throw error;
-
-      // Check if all exercises are completed after this update
-      const { data: exercises } = await supabase
-        .from('training_plan_exercises')
-        .select('completed')
-        .eq('plan_id', planId);
-
-      const allCompleted = exercises?.every(ex => ex.completed) ?? false;
-      if (allCompleted) {
-        // Update plan completion status
-        const { data: { user } } = await supabase.auth.getUser();
-        await supabase
-          .from('user_training_plans')
-          .update({ completed: true })
-          .eq('plan_id', planId)
-          .eq('user_id', user?.id);
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
       }
 
-      fetchPlanDetails(); // Refresh the view
+      setEditingExerciseId(null);
+      setCommentText('');
+      setStravaLink('');
+      fetchPlanDetails();
     } catch (error) {
-      console.error('Error updating exercise completion:', error);
-      alert('Failed to update exercise completion');
+      console.error('Error saving comment:', error);
+      alert('Failed to save comment');
     }
   };
 
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   const getDateForWeekDay = (weekNumber: number, dayIndex: number) => {
-    if (!plan?.start_date) return '';
-    const startDate = new Date(plan.start_date);
-    const dayOffset = (weekNumber - 1) * 7 + dayIndex;
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + dayOffset);
-    return format(date, 'd. MMM'); // Will format as e.g. "15. Mar"
+    // Get today's date
+    const today = new Date();
+    
+    // Get current week day (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
+    const currentDayOfWeek = today.getDay();
+    
+    // Calculate days to subtract to get to the start of the current week (Monday)
+    const daysToMonday = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1;
+    
+    // Get the date for Monday of the current week
+    const currentWeekMonday = new Date(today);
+    currentWeekMonday.setDate(today.getDate() - daysToMonday);
+    
+    // Calculate the target date based on week number and day index
+    const targetDate = new Date(currentWeekMonday);
+    targetDate.setDate(currentWeekMonday.getDate() + ((weekNumber - 1) * 7) + dayIndex);
+    
+    // Format the date
+    return `${targetDate.getDate()}. ${getMonthName(targetDate.getMonth())}`;
+  };
+
+  const getMonthName = (monthIndex: number): string => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des'];
+    return months[monthIndex];
   };
 
   const getDayDuration = (weekNumber: number, dayIndex: number) => {
@@ -288,6 +281,54 @@ export default function PlanDetailsScreen() {
     }
     return `${totalMinutes}min`;
   };
+
+  const handleCommentSubmit = async (exerciseId: number) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No user found');
+
+      // First, get the current exercise and its comments
+      const { data: currentExercise, error: fetchError } = await supabase
+        .from('training_plan_exercises')
+        .select('comments')
+        .eq('id', exerciseId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Prepare the new comment
+      const newComment = {
+        id: generateUUID(),
+        comment: commentText.trim(),
+        created_at: new Date().toISOString(),
+        user_id: user.id,
+        strava_link: stravaLink.trim() || undefined
+      };
+
+      // Combine existing comments with new comment
+      const existingComments = Array.isArray(currentExercise?.comments) ? currentExercise.comments : [];
+      const updatedComments = [...existingComments, newComment];
+
+      // Update the exercise with all comments
+      const { error } = await supabase
+        .from('training_plan_exercises')
+        .update({
+          comments: updatedComments
+        })
+        .eq('id', exerciseId);
+
+      if (error) throw error;
+
+      setEditingExerciseId(null);
+      setCommentText('');
+      setStravaLink('');
+      fetchPlanDetails();
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      alert('Failed to add comment');
+    }
+  };
+
   const styles = StyleSheet.create({
     container: {
       flex: 1,
@@ -414,17 +455,21 @@ export default function PlanDetailsScreen() {
     modalContainer: {
       width: '100%',
       maxWidth: 400,
+      maxHeight: '80%',
+      paddingBottom:200,
     },
     modalContent: {
       backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
       borderRadius: 12,
       padding: 20,
+      paddingBottom: 250,
     },
     modalHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
       marginBottom: 20,
+      
     },
     modalTitle: {
       fontSize: 18,
@@ -509,6 +554,81 @@ export default function PlanDetailsScreen() {
       alignItems: 'center',
       backgroundColor: isDarkMode ? '#121212' : '#f5f5f5',
     },
+    commentContainer: {
+      backgroundColor: isDarkMode ? '#2C2C2C' : '#fff',
+      padding: 12,
+      borderRadius: 8,
+      marginTop: 8,
+    },
+    commentLabel: {
+      fontSize: 12,
+      color: '#999',
+      marginBottom: 4,
+    },
+    commentText: {
+      color: isDarkMode ? '#fff' : '#000',
+      fontSize: 14,
+    },
+    commentDate: {
+      fontSize: 12,
+      color: '#666',
+      marginTop: 4,
+      textAlign: 'right',
+    },
+    stravaLink: {
+      marginTop: 8,
+    },
+    stravaLinkText: {
+      color: '#FC4C02',
+      fontSize: 14,
+    },
+    commentForm: {
+      marginTop: 8,
+      gap: 8,
+    },
+    commentInput: {
+      borderWidth: 1,
+      borderColor: isDarkMode ? '#444' : '#ddd',
+      borderRadius: 8,
+      padding: 8,
+      color: isDarkMode ? '#fff' : '#000',
+      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+    },
+    commentButtons: {
+      flexDirection: 'row',
+      gap: 8,
+      justifyContent: 'flex-end',
+    },
+    addCommentButton: {
+      marginTop: 8,
+      padding: 8,
+      backgroundColor: isDarkMode ? '#2C2C2C' : '#fff',
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    addCommentText: {
+      color: isDarkMode ? '#fff' : '#000',
+      fontSize: 14,
+    },
+    coachCommentContainer: {
+      backgroundColor: isDarkMode ? '#1E3A8A' : '#E3F2FD',
+    },
+    description: {
+      fontSize: 14,
+      color: isDarkMode ? '#fff' : '#666',
+    },
+    restBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: isDarkMode ? '#2C2C2C' : '#F5F5F5',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 16,
+    },
+    restText: {
+      fontSize: 14,
+    },
   }); 
   if (loading) {
     return (
@@ -519,6 +639,164 @@ export default function PlanDetailsScreen() {
   }
 
   const todaysExercises = getTodaysExercises();
+
+  const renderExercise = (exercise: Exercise) => (
+    <View key={exercise.id} style={styles.exerciseItem}>
+      <View style={styles.exerciseInfo}>
+        <Text style={styles.exerciseName}>{exercise.name}</Text>
+        <Text style={styles.exerciseDetails}>
+          {exercise.sets} sets × {exercise.reps} reps • {exercise.duration_minutes}min
+        </Text>
+        {exercise.notes && (
+          <Text style={styles.description}>{exercise.notes}</Text>
+        )}
+        
+        {exercise.completed && renderComments(exercise)}
+
+        {exercise.completed && editingExerciseId === exercise.id && (
+          <View style={styles.commentForm}>
+            <TextInput
+              style={styles.commentInput}
+              value={commentText}
+              onChangeText={setCommentText}
+              placeholder="Legg inn kommentar..."
+              placeholderTextColor={isDarkMode ? '#666' : '#666'}
+              multiline
+            />
+            <TextInput
+              style={styles.commentInput}
+              value={stravaLink}
+              onChangeText={setStravaLink}
+              placeholder="Strava aktivitetslenke (valgfritt)"
+              placeholderTextColor={isDarkMode ? '#666' : '#666'}
+            />
+            <View style={styles.commentButtons}>
+              <Button 
+                title="Avbryt"
+                onPress={() => {
+                  setEditingExerciseId(null);
+                  setCommentText('');
+                  setStravaLink('');
+                }}
+                style={{ backgroundColor: isDarkMode ? '#2C2C2C' : '#fff' }}
+                textStyle={{ color: isDarkMode ? '#fff' : '#000' }}
+              />
+              <Button 
+                title="Lagre" 
+                onPress={() => handleCommentSubmit(exercise.id)}
+                style={{ backgroundColor: isDarkMode ? '#2C2C2C' : '#fff' }}
+                textStyle={{ color: isDarkMode ? '#fff' : '#000' }}
+              />
+            </View>
+          </View>
+        )}
+
+        {exercise.completed && !editingExerciseId && (
+          <Pressable 
+            style={styles.addCommentButton}
+            onPress={() => {
+              setEditingExerciseId(exercise.id);
+              setCommentText(exercise.comment || '');
+              setStravaLink(exercise.strava_link || '');
+            }}
+          >
+            <Text style={styles.addCommentText}>
+              {exercise.comment ? 'Rediger kommentar' : 'Legg inn kommentar'}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+
+      <Pressable
+        style={styles.checkboxContainer}
+        onPress={() => handleExerciseComplete(exercise)}
+        disabled={loadingProgress}
+      >
+        {exercise.type === 'rest' ? (
+          <View style={styles.restBadge}>
+            <Ionicons name="bed-outline" size={16} color={isDarkMode ? '#fff' : '#666'} />
+            <Text style={[styles.restText, { color: isDarkMode ? '#fff' : '#666' }]}>
+              Hviledag
+            </Text>
+          </View>
+        ) : exercise.completed === false ? (
+          <View style={styles.ongoingBadge}>
+            <Ionicons name="time-outline" size={16} color="#7B61FF" />
+            <Text style={styles.ongoingText}>
+              {exercises.filter(ex => 
+                ex.week_number === exercise.week_number && 
+                ex.day_number === exercise.day_number && 
+                ex.type !== 'rest' && 
+                ex.completed
+              ).length}/
+              {exercises.filter(ex => 
+                ex.week_number === exercise.week_number && 
+                ex.day_number === exercise.day_number && 
+                ex.type !== 'rest'
+              ).length} 
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.completedBadge}>
+            <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+          </View>
+        )}
+      </Pressable>
+    </View>
+  );
+
+  const renderComments = (exercise: Exercise) => {
+    // Combine all comments and sort them by date
+    const allComments = [
+      ...(exercise.comments || []).map(comment => ({
+        ...comment,
+        type: 'user'
+      })),
+      ...(exercise.coach_comments || []).map(comment => ({
+        ...comment,
+        type: 'coach'
+      }))
+    ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    return (
+      <ScrollView>
+        {allComments.map((comment, index) => (
+          <View 
+            key={comment.id || index} 
+            style={[
+              styles.commentContainer,
+              comment.type === 'coach' && styles.coachCommentContainer
+            ]}
+          >
+            <Text style={styles.commentLabel}>
+              {comment.type === 'coach' ? 'Coach kommentar:' : 'Dine kommentarer:'}
+            </Text>
+            <Text style={styles.commentText}>{comment.comment}</Text>
+            {comment.type === 'user' && comment.strava_link && (
+              <Pressable 
+                onPress={async () => {
+                  const url = comment.strava_link!;
+                  // Check if the URL can be opened
+                  const canOpen = await Linking.canOpenURL(url);
+                  if (canOpen) {
+                    await Linking.openURL(url);
+                  } else {
+                    Alert.alert('Error', 'Cannot open Strava link');
+                  }
+                }}
+                style={styles.stravaLink}
+              >
+                <Text style={[styles.stravaLinkText, { color: '#FC4C02' }]}>Se på Strava</Text>
+              </Pressable>
+            )}
+            <Text style={styles.commentDate}>
+              {format(new Date(comment.created_at), 'PPp')}
+            </Text>
+          </View>
+        ))}
+      </ScrollView>
+    );
+  };
 
   return (
     <>
@@ -534,10 +812,16 @@ export default function PlanDetailsScreen() {
             <Text style={styles.progressText}>Uke {getCurrentWeek()}</Text>
             <Text style={styles.progressText}>
               {exercises
-                .filter(ex => ex.week_number === getCurrentWeek() && 
-                  routineProgress?.completed_exercises?.includes(ex.id))
-                .length}/
-              {exercises.filter(ex => ex.week_number === getCurrentWeek()).length} fullført
+                .filter(ex => 
+                  ex.week_number === getCurrentWeek() && 
+                  ex.type !== 'rest' &&
+                  ex.completed
+                ).length}/
+              {exercises
+                .filter(ex => 
+                  ex.week_number === getCurrentWeek() && 
+                  ex.type !== 'rest'
+                ).length} fullført
             </Text>
           </View>
           <View style={styles.progressBar}>
@@ -545,7 +829,9 @@ export default function PlanDetailsScreen() {
               style={[
                 styles.progressFill, 
                 { 
-                  width: `${((routineProgress?.completed_exercises?.length || 0) / exercises.filter(ex => ex.week_number === getCurrentWeek()).length) * 100}%` 
+                  width: `${(exercises
+                    .filter(ex => ex.week_number === getCurrentWeek() && ex.type !== 'rest' && ex.completed).length / 
+                    exercises.filter(ex => ex.week_number === getCurrentWeek() && ex.type !== 'rest').length) * 100}%` 
                 }
               ]} 
             />
@@ -593,18 +879,52 @@ export default function PlanDetailsScreen() {
                       <Text style={styles.dayText}>{day}</Text>
                       <View style={styles.daySubtitle}>
                         <Text style={styles.dateText}>{dateString}</Text>
-                        <Text style={styles.durationText}>• {duration}</Text>
+                        {/* If exercise type is rest, do not show duration */}
+                        {status !== 'rest' && (
+                          <Text style={styles.durationText}>• {duration}</Text>
+                        )}
                       </View>
                     </View>
-                    {status === 'ongoing' ? (
+                    {status === 'rest' ? (
+                      <View style={styles.restBadge}>
+                        <Ionicons name="bed-outline" size={16} color={isDarkMode ? '#fff' : '#666'} />
+                        <Text style={[styles.restText, { color: isDarkMode ? '#fff' : '#666' }]}>
+                          Hviledag
+                        </Text>
+                      </View>
+                    ) : status === 'ongoing' ? (
                       <View style={styles.ongoingBadge}>
                         <Ionicons name="time-outline" size={16} color="#7B61FF" />
-                        <Text style={styles.ongoingText}>{exercises.filter(ex => ex.week_number === weekNumber && ex.day_number === dayIndex + 1 && ex.completed).length}/{exercises.filter(ex => ex.week_number === weekNumber && ex.day_number === dayIndex + 1).length} fullført</Text>
+                        <Text style={styles.ongoingText}>
+                          {exercises.filter(ex => 
+                            ex.week_number === weekNumber && 
+                            ex.day_number === dayIndex + 1 && 
+                            ex.type !== 'rest' && 
+                            ex.completed
+                          ).length}/
+                          {exercises.filter(ex => 
+                            ex.week_number === weekNumber && 
+                            ex.day_number === dayIndex + 1 && 
+                            ex.type !== 'rest'
+                          ).length} fullført
+                        </Text>
                       </View>
                     ) : (
                       <View style={styles.completedBadge}>
                         <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-                        <Text style={styles.completedText}>{exercises.filter(ex => ex.week_number === weekNumber && ex.day_number === dayIndex + 1 && routineProgress?.completed_exercises?.includes(ex.id)).length}/{exercises.filter(ex => ex.week_number === weekNumber && ex.day_number === dayIndex + 1).length} fullført</Text>
+                        <Text style={styles.completedText}>
+                          {exercises.filter(ex => 
+                            ex.week_number === weekNumber && 
+                            ex.day_number === dayIndex + 1 && 
+                            ex.type !== 'rest' && 
+                            ex.completed
+                          ).length}/
+                          {exercises.filter(ex => 
+                            ex.week_number === weekNumber && 
+                            ex.day_number === dayIndex + 1 && 
+                            ex.type !== 'rest'
+                          ).length} fullført
+                        </Text>
                       </View>
                     )}
                   </Pressable>
@@ -614,72 +934,55 @@ export default function PlanDetailsScreen() {
           );
         })}
       </ScrollView>
-
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>{selectedDayTitle}</Text>
-                <Pressable 
-                  onPress={() => setModalVisible(false)}
-                  hitSlop={10}
-                >
-                  <Text style={styles.closeButton}>×</Text>
-                </Pressable>
-              </View>
-
-              {selectedExercises.map((exercise) => (
-                <Pressable
-                  key={exercise.id}
-                  style={styles.exerciseItem}
-                >
-                  <View style={styles.exerciseInfo}>
-                    <Text style={[styles.exerciseName, exercise.completed && styles.completedText]}>
-                      {exercise.name}
-                    </Text>
-                    <Text style={styles.exerciseDetails}>
-                      {exercise.sets} sets × {exercise.reps} reps
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={() => handleExerciseCompletion(exercise)}
-                    style={styles.checkboxContainer}
+      {/* Only show modal if the selected exercises are NOT rest type */}
+      {selectedExercises.some(exercise => exercise.type !== 'rest') && (
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={modalVisible}
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>{selectedDayTitle}</Text>
+                  <Pressable 
+                    onPress={() => setModalVisible(false)}
+                    hitSlop={10}
                   >
-                    <Ionicons 
-                      name={exercise.completed ? "checkmark-circle" : "checkmark-circle-outline"} 
-                      size={24} 
-                      color={exercise.completed ? "#4CAF50" : "#666"} 
-                    />
+                    <Text style={styles.closeButton}>×</Text>
                   </Pressable>
-                </Pressable>
-              ))}
-
-              <View style={styles.modalButtons}>
-                
-                <Pressable
-                  style={styles.completeButton}
-                  onPress={async () => {
-                    for (const exercise of selectedExercises) {
-                      if (!isExerciseCompleted(exercise.id)) {
-                        await handleExerciseComplete(exercise.id);
-                      }
-                    }
-                    setModalVisible(false);
-                  }}
-                >
-                  <Text style={styles.completeButtonText}>Fullfør</Text>
-                </Pressable>
+                </View>
+             
+                {selectedExercises
+                  .filter(exercise => exercise.type !== 'rest')
+                  .map((exercise) => renderExercise(exercise))}
+             
+                <View style={styles.modalButtons}>
+                  {!selectedExercises.filter(ex => ex.type !== 'rest').every(exercise => exercise.completed) ? (
+                    <Pressable
+                      style={styles.completeButton}
+                      onPress={async () => {
+                        for (const exercise of selectedExercises.filter(ex => ex.type !== 'rest')) {
+                          if (!exercise.completed) {
+                            await handleExerciseComplete(exercise);
+                          }
+                        }
+                        setModalVisible(false);
+                      }}
+                    >
+                      <Text style={styles.completeButtonText}>Fullfør</Text>
+                    </Pressable>
+                  ) : (
+                    <Pressable style={{ backgroundColor: 'transparent' }} />
+                  )}
+                </View>
               </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      )}
     </>
   );
 }

@@ -9,6 +9,8 @@ interface ButtonProps {
   size?: 'small' | 'medium' | 'large';
   loading?: boolean;
   disabled?: boolean;
+  height?: number;
+  width?: number; 
   style?: ViewStyle;
   textStyle?: TextStyle;
 }
@@ -20,6 +22,8 @@ export function Button({
   size = 'medium',
   loading = false,
   disabled = false,
+  height,
+  width,
   style,
   textStyle,
 }: ButtonProps) {
@@ -100,6 +104,8 @@ export function Button({
         getVariantStyle(),
         getSizeStyle(),
         disabled && styles.disabledButton,
+        height && { height },
+        width && { width },
         style,
       ]}
     >

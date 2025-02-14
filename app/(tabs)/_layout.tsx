@@ -6,15 +6,15 @@ import { useTheme } from '@/src/context/ThemeContext';
 import { DrawerActions, useNavigation } from '@react-navigation/native';
 import { useNotifications } from '@/src/context/NotificationContext';
 import { useMessages } from '@/src/context/MessagesContext';
-import { useAuth } from '../../src/context/AuthContext';
-import { supabase } from '@/src/lib/supabase';
+import { useAuth } from '@/src/context/AuthContext';
+import { Link } from 'expo-router';
 
 export default function TabLayout() {
   const { isDarkMode } = useTheme();
   const navigation = useNavigation();
   const { unreadCount: notificationCount } = useNotifications();
   const { chats = [] } = useMessages();
-  const { session } = useAuth();
+  const { isCoach } = useAuth();
 
   // Calculate total unread messages
   const unreadMessagesCount = chats.reduce((count, chat) => {
@@ -60,70 +60,65 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-
-          let iconName;
-
-          if (route.name === 'index') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'messages') {
-            return (
-              <View>
-                <Ionicons 
-                  name={focused ? "chatbubbles" : "chatbubbles-outline"} 
-                  size={size} 
-                  color={color} 
-                />
-                {unreadMessagesCount > 0 && (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>
-                      {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            );
-          } else if (route.name === 'profile') {
-            iconName = focused ? 'person' : 'person-outline';
-          }
-
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: isDarkMode ? '#0047AB' : '#0047AB',
-        tabBarInactiveTintColor: isDarkMode ? '#979797' : '#757575',
+      screenOptions={{
+        headerTintColor: isDarkMode ? '#fff' : '#000',
         tabBarStyle: {
           backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
-          borderTopColor: isDarkMode ? '#333' : '#eee',
         },
         headerStyle: {
           backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
         },
-      })}
+        tabBarActiveTintColor: '#0047AB',
+        headerRight: () => (
+          <View style={{ flexDirection: 'row', gap: 16, marginRight: 16 }}>
+            <Link href="/messages" asChild>
+              <Pressable>
+                <Ionicons 
+                  name="chatbubble-outline" 
+                  size={24} 
+                  color={isDarkMode ? '#fff' : '#000'} 
+                />
+              </Pressable>
+            </Link>
+            <Link href="/notification" asChild>
+              <Pressable>
+                <Ionicons 
+                  name="notifications-outline" 
+                  size={24} 
+                  color={isDarkMode ? '#fff' : '#000'} 
+                />
+              </Pressable>
+            </Link>
+          </View>
+        ),
+      }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Lopeprat',
-          tabBarLabel: 'Lopeprat',
-          headerTintColor: isDarkMode ? '#fff' : '#000',
+          href: null,
+        }}
+      />
+
+  
+      
+      <Tabs.Screen
+        name="coachfeed"
+        options={{
+          title: 'Athletes Progress',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+            <Ionicons name="people-outline" size={size} color={color} />
           ),
-          headerRight: () => (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 16 }}>
-              <Pressable 
-                style={{ marginRight: 16 }}
-                onPress={() => router.push('/(messages)/messages')}
-              >
-                <MessageIcon />
-              </Pressable>
-              <Pressable
-                onPress={() => router.push('/notification')}
-              >
-                <NotificationIcon />
-              </Pressable>
-            </View>
+          href: isCoach ? undefined : null,
+        }}
+      />
+    <Tabs.Screen
+        name="training"
+        options={{
+          title: 'Treningsplan',
+          tabBarLabel: 'Treningsplan',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="fitness-outline" size={size} color={color} />
           ),
         }}
       />
@@ -131,28 +126,16 @@ export default function TabLayout() {
         name="podcasts"
         options={{
           title: 'Podcasts',
-          headerTintColor: isDarkMode ? '#fff' : '#000',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="mic-outline" size={size} color={color} />
           ),
         }}
       />
-      <Tabs.Screen
-        name="training"
-        options={{
-          title: 'Treningsplan',
-          tabBarLabel: 'Treningsplan',
-          headerTintColor: isDarkMode ? '#fff' : '#000',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="fitness-outline" size={size} color={color} />
-          ),
-        }}
-      />
+
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          headerTintColor: isDarkMode ? '#fff' : '#000',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-outline" size={size} color={color} />
           ),

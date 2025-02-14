@@ -4,7 +4,6 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { AuthProvider } from '../src/context/AuthContext';
 import { PremiumProvider } from '../src/context/PremiumContext';
-import { PostProvider } from '../src/context/PostContext';
 import { Drawer } from 'expo-router/drawer';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeProvider, useTheme } from '@/src/context/ThemeContext';
@@ -108,12 +107,10 @@ export default function RootLayout() {
       <AuthProvider>
         <NotificationProvider>
           <MessagesProvider>
-            <PostProvider>
               <PremiumProvider>
                 <GlobalMessageSubscription />
                 <Slot />
               </PremiumProvider>
-            </PostProvider>
           </MessagesProvider>
         </NotificationProvider>
       </AuthProvider>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Image, RefreshControl, ActivityIndicator, Linking } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/context/AuthContext';
@@ -20,6 +20,7 @@ import { useTheme } from '@/src/context/ThemeContext';
         title: string;
       };
     }[];
+    is_premium: boolean;
   };
 
 export default function TrainingScreen() {
@@ -73,6 +74,7 @@ export default function TrainingScreen() {
           username,
           avatar_url,
           role,
+          is_premium,
           user_training_plans!left (
             plan_id,
             training_plans!inner (
@@ -216,6 +218,7 @@ export default function TrainingScreen() {
       fontWeight: 'bold',
       marginTop: 16,
       marginBottom: 8,
+      color: isDarkMode ? '#fff' : '#000',
       textAlign: 'center',
     },
     emptyDescription: {
@@ -226,13 +229,19 @@ export default function TrainingScreen() {
     },
     emptyText: {
       fontSize: 16,
-      color: '#fff',
+      color: isDarkMode ? '#fff' : '#000',
       textAlign: 'center',
     },
     
     editButton: {
       flex: 1,
       marginRight: 8,
+      backgroundColor: isDarkMode ? '#0047AB' : '#0047AB',
+    },
+    createButton: {
+      flex: 1,
+      marginRight: 8,
+      marginLeft: 30,
       backgroundColor: isDarkMode ? '#0047AB' : '#0047AB',
     },
     viewButton: {
@@ -242,18 +251,53 @@ export default function TrainingScreen() {
 
       backgroundColor: isDarkMode ? '#0047AB' : '#0047AB',
     },
-
+    bottomHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 20,
+      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+    },
+    templateButton: {
+      marginBottom: 16,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: '#ccc',
+    },
+    header: {
+      width: '100%',
+    },
   });
   // Coach view with users list
   if (userProfile?.role === 'coach') {
     return (
       <View style={styles.container}>
-       
+        <View style={styles.header}>
+          <Button 
+            title="Administrer maler"
+            onPress={() => {
+              console.log('Navigating to manage templates'); // Debug log
+              router.push('/(training)/manage-templates');
+            }}
+            style={[styles.templateButton, { 
+              backgroundColor: isDarkMode ? '#2C2C2C' : '#fff',
+              marginHorizontal: 16,
+              marginTop: 16,
+            }]}
+            textStyle={{ 
+              color: isDarkMode ? '#fff' : '#000'
+            }}
+          />
+        </View>
         {loading ? (
           <ActivityIndicator size="large" style={styles.loading} color="#0047AB"/>
         ) : (
           <FlatList
-            data={users}
+            data={users.filter(user => user.is_premium)}
             renderItem={({ item }) => (
               <Card style={styles.userCard}>
                 <View style={styles.userInfo}>
@@ -275,7 +319,7 @@ export default function TrainingScreen() {
                   <Button
                     title="Opprett Plan"
                     onPress={() => handleUserPress(item.id)}
-                    variant="primary"
+                    style={styles.createButton}
                   />
                 )}
               </Card>
@@ -295,12 +339,46 @@ export default function TrainingScreen() {
     );
   }
 
+  async function onSubscribe(): Promise<void> {
+    //Testing purposes, set is_premium to in the database supabase
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ is_premium: true })
+      .eq('id', session?.user.id);
+
+    if (error) {
+      console.error('Error updating profile:', error);
+    } else {
+      console.log('Profile updated successfully:', data);
+    }
+    router.reload();
+  }
+
   // User view with their training plan
   return (
     <View style={styles.container}>
   
       {loading ? (
         <ActivityIndicator size="large" style={styles.loading} />
+      ) : !userProfile?.is_premium ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="fitness-outline" size={64} color="#666" />
+          <Text style={styles.emptyTitle}>Subscribe to Get Started</Text>
+          <Text style={styles.emptyDescription}>
+            Subscribe to access personalized training plans from our expert coaches!
+          </Text>
+          <Button
+            title="Subscribe Nå - 199kr/måned"
+            onPress={() => onSubscribe()}
+            style={{
+              height: 50,
+              width: '100%',
+              marginTop: 20,
+              backgroundColor: isDarkMode ? '#0047AB' : '#0047AB',
+            }}
+            size="large"
+          />
+        </View>
       ) : plans.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="fitness-outline" size={64} color="#666" />

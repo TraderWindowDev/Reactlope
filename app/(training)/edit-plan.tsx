@@ -6,18 +6,22 @@ import { Card } from '../../components/Card';
 import { supabase } from '@/src/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/src/context/AuthContext';
+import { Picker } from '@react-native-picker/picker';
+import { useTheme } from '@/src/context/ThemeContext';
+import { scheduleWorkoutReminder } from '@/src/utils/notifications';
 const WEEKDAYS = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
 
 type Exercise = {
   id?: number;
   name: string;
-  sets: number;
-  reps: number;
+  sets: number | null;
+  reps: number | null;
   duration_minutes: number;
   week_number: number;
   day_number: number;
   notes: string;
   plan_id: number;
+  type: 'exercise' | 'rest' | 'cardio';
 };
 
 export default function EditPlanScreen() {
@@ -33,14 +37,18 @@ export default function EditPlanScreen() {
     sets: '',
     reps: '',
     duration_minutes: '',
-    notes: ''
+    notes: '',
+    type: 'exercise' as const
   });
   const [selectedWeek, setSelectedWeek] = useState<number>(1);
   const [selectedDay, setSelectedDay] = useState<number>(1);
+  const { isDarkMode } = useTheme();
+  const [templates, setTemplates] = useState<Exercise[]>([]);
 
   useEffect(() => {
     fetchPlanDetails();
     fetchUserDetails();
+    fetchTemplates();
   }, [planId]);
 
   const fetchPlanDetails = async () => {
@@ -96,6 +104,19 @@ export default function EditPlanScreen() {
     }
   };
 
+  const fetchTemplates = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('exercise_templates')
+        .select('*');
+
+      if (error) throw error;
+      setTemplates(data || []);
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+    }
+  };
+
   const handleDayPress = (weekNumber: number, dayNumber: number) => {
     setSelectedWeek(weekNumber);
     setSelectedDay(dayNumber);
@@ -105,7 +126,8 @@ export default function EditPlanScreen() {
       sets: '',
       reps: '',
       duration_minutes: '',
-      notes: ''
+      notes: '',
+      type: 'exercise'
     });
     setModalVisible(true);
   };
@@ -114,61 +136,221 @@ export default function EditPlanScreen() {
     setSelectedExercise(exercise);
     setExerciseDetails({
       name: exercise.name,
-      sets: exercise.sets.toString(),
-      reps: exercise.reps.toString(),
+      sets: exercise.sets?.toString() || '',
+      reps: exercise.reps?.toString() || '',
       duration_minutes: exercise.duration_minutes.toString(),
-      notes: exercise.notes
+      notes: exercise.notes,
+      type: exercise.type
     });
     setModalVisible(true);
   };
 
   const handleSaveExercise = async () => {
     try {
-      if (!exerciseDetails.name || !exerciseDetails.sets || !exerciseDetails.reps) {
-        alert('Please fill in exercise name, sets, and reps');
+      if (!exerciseDetails.name) {
+        alert('Please enter exercise name');
+        return;
+      }
+
+      if (!exerciseDetails.duration_minutes) {
+        alert('Please enter duration');
+        return;
+      }
+
+      if (exerciseDetails.type === 'exercise' && (!exerciseDetails.sets || !exerciseDetails.reps)) {
+        alert('Please enter sets and reps');
         return;
       }
 
       const exerciseData = {
         name: exerciseDetails.name,
-        sets: parseInt(exerciseDetails.sets),
-        reps: parseInt(exerciseDetails.reps),
+        sets: exerciseDetails.type === 'exercise' ? parseInt(exerciseDetails.sets) : 0,
+        reps: exerciseDetails.type === 'exercise' ? parseInt(exerciseDetails.reps) : 0,
         duration_minutes: parseInt(exerciseDetails.duration_minutes) || 0,
         notes: exerciseDetails.notes,
+        type: exerciseDetails.type,
         plan_id: planId,
         week_number: selectedWeek,
-        day_number: selectedDay
+        day_number: selectedDay,
+        start_time: new Date(new Date().setHours(9, 0, 0, 0)).toISOString() // Default to 9 AM
       };
 
       if (selectedExercise?.id) {
-        // Update existing exercise
         const { error } = await supabase
           .from('training_plan_exercises')
           .update(exerciseData)
           .eq('id', selectedExercise.id);
 
         if (error) throw error;
+
+        // Schedule notification for updated exercise
+        if (exerciseData.type !== 'rest') {
+          try {
+            await scheduleWorkoutReminder(selectedExercise.id, new Date(exerciseData.start_time));
+          } catch (error) {
+            console.error('Error scheduling notification:', error);
+          }
+        }
       } else {
-        // Create new exercise
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('training_plan_exercises')
-          .insert([exerciseData]);
+          .insert([exerciseData])
+          .select()
+          .single();
 
         if (error) throw error;
+
+        // Schedule notification for new exercise
+        if (exerciseData.type !== 'rest' && data) {
+          try {
+            await scheduleWorkoutReminder(data.id, new Date(exerciseData.start_time));
+          } catch (error) {
+            console.error('Error scheduling notification:', error);
+          }
+        }
       }
 
       setModalVisible(false);
-      fetchPlanDetails(); // Refresh the schedule
+      fetchPlanDetails();
     } catch (error) {
       console.error('Error saving exercise:', error);
       alert('Failed to save exercise');
     }
   };
 
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDarkMode ? '#121212' : '#f5f5f5',
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      marginBottom: 8,
+      marginHorizontal: 16,
+      color: isDarkMode ? '#fff' : '#000',
+      marginTop: 16,
+    },
+    subtitle: {
+      fontSize: 16,
+      color: isDarkMode ? '#fff' : '#666',
+      marginBottom: 24,
+      marginHorizontal: 16,
+    },
+    weekContainer: {
+      marginHorizontal: 16,
+      marginBottom: 10,
+    },
+    weekCard: {
+      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+      borderRadius: 12,
+  
+      elevation: 3,
+      padding: 16,
+    },
+    weekHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    weekTitle: {
+      fontSize: 18,
+      color: isDarkMode ? '#fff' : '#000',
+    },
+    weekContent: {
+      marginTop: 16,
+      borderTopWidth: 1,
+      borderTopColor: isDarkMode ? '#2C2C2C' : '#eee',
+    },
+    dayRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: isDarkMode ? '#2C2C2C' : '#eee',
+    },
+    dayText: {
+      width: 100,
+      fontSize: 16,
+      color: isDarkMode ? '#fff' : '#000',
+    },
+    exercisesContainer: {
+      flex: 1,
+      alignItems: 'flex-end',
+    },
+    exerciseItem: {
+      marginBottom: 8,
+      alignItems: 'flex-end',
+    },
+    exerciseName: {
+      fontSize: 14,
+      color: isDarkMode ? '#fff' : '#000',
+    },
+    exerciseDetails: {
+      fontSize: 12,
+      color: isDarkMode ? '#fff' : '#666',
+    },
+    addIcon: {
+      marginTop: 8,
+      color: isDarkMode ? '#fff' : '#000',
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContent: {
+      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+      borderRadius: 12,
+      padding: 20,
+      width: '100%',
+      maxWidth: 500,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+    },
+    closeButton: {
+      fontSize: 24,
+      fontWeight: '400',
+    },
+    formGroup: {
+      marginBottom: 16,
+    },
+    label: {
+      fontSize: 16,
+      fontWeight: '500',
+      marginBottom: 8,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: '#ddd',
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 16,
+    },
+    textArea: {
+      height: 100,
+      textAlignVertical: 'top',
+    },
+    saveButton: {
+      marginTop: 20,
+      backgroundColor: '#0047AB',
+    },
+  }); 
+
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>Registrer trening</Text>
-      <Text style={styles.subtitle}>Registrer treningsplanen til {userName}!</Text>
+      <Text style={styles.title}>Rediger trening</Text>
+      <Text style={styles.subtitle}>Rediger treningsplanen til {userName}!</Text>
 
       {[1, 2, 3, 4].map((weekNumber) => (
         <Pressable
@@ -182,7 +364,7 @@ export default function EditPlanScreen() {
               <Ionicons 
                 name={expandedWeek === weekNumber ? "chevron-up" : "chevron-down"} 
                 size={24} 
-                color="#000" 
+                color={isDarkMode ? '#fff' : '#000'} 
               />
             </View>
 
@@ -213,7 +395,7 @@ export default function EditPlanScreen() {
                         <Ionicons 
                           name="add-circle-outline" 
                           size={24} 
-                          color="#000" 
+                          color={isDarkMode ? '#999' : '#999'} 
                         />
                       </View>
                     </Pressable>
@@ -232,9 +414,9 @@ export default function EditPlanScreen() {
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { backgroundColor: isDarkMode ? '#1E1E1E' : '#fff' }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
+              <Text style={[styles.modalTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
                 {selectedExercise ? 'Endre trening' : 'Legg til trening'}
               </Text>
               <Pressable onPress={() => setModalVisible(false)}>
@@ -243,42 +425,95 @@ export default function EditPlanScreen() {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Trening</Text>
+              <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Type</Text>
+              <Picker
+                selectedValue={exerciseDetails.type}
+                onValueChange={(value) => setExerciseDetails({...exerciseDetails, type: value})}
+                style={{ color: isDarkMode ? '#fff' : '#000', backgroundColor: isDarkMode ? '#2C2C2C' : '#fff'}}
+              >
+                <Picker.Item label="Exercise" value="exercise" />
+                <Picker.Item label="Rest" value="rest" />
+                <Picker.Item label="Cardio" value="cardio" />
+              </Picker>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Velg en mal (valgfritt)</Text>
+              <Picker
+                selectedValue=""
+                onValueChange={(itemValue) => {
+                  if (!itemValue) return;
+                  const template = templates.find(t => t.id === Number(itemValue));
+                  if (template) {
+                    setExerciseDetails({
+                      name: template.name,
+                      sets: template.sets?.toString() || '0',
+                      reps: template.reps?.toString() || '0',
+                      duration_minutes: template.duration_minutes.toString(),
+                      notes: template.notes || '',
+                      type: template.type
+                    });
+                  }
+                }}
+                style={{ color: isDarkMode ? '#fff' : '#000', backgroundColor: isDarkMode ? '#2C2C2C' : '#fff'}}
+              >
+                <Picker.Item label="Velg en mal..." value="" style={{ color: isDarkMode ? '#000' : '#000'}}/>
+                {templates.map(template => (
+                  <Picker.Item 
+                    style={{ color: isDarkMode ? '#000' : '#000'}}
+                    key={template.id?.toString()}
+                    label={`${template.name} (${template.type})`}
+                    value={template.id?.toString()}
+                  />
+                ))}
+              </Picker>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Navn</Text>
               <TextInput
-                style={styles.input}
-                placeholder="e.g., Push-ups"
+                style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ddd' }]}
+                placeholder="f.eks., Sprint"
+                placeholderTextColor={isDarkMode ? '#666' : '#999'}
                 value={exerciseDetails.name}
                 onChangeText={(text) => setExerciseDetails({...exerciseDetails, name: text})}
               />
             </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Set</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., 3"
-                value={exerciseDetails.sets}
-                onChangeText={(text) => setExerciseDetails({...exerciseDetails, sets: text})}
-                keyboardType="numeric"
-              />
-            </View>
+            {exerciseDetails.type === 'exercise' && (
+              <>
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Set</Text>
+                  <TextInput
+                    style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ddd' }]}
+                    placeholder="f.eks., 3"
+                    placeholderTextColor={isDarkMode ? '#666' : '#999'}
+                    value={exerciseDetails.sets}
+                    onChangeText={(text) => setExerciseDetails({...exerciseDetails, sets: text})}
+                    keyboardType="numeric"
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Rep</Text>
+                  <TextInput
+                    style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ddd' }]}
+                    placeholder="f.eks., 12"
+                    placeholderTextColor={isDarkMode ? '#666' : '#999'}
+                    value={exerciseDetails.reps}
+                    onChangeText={(text) => setExerciseDetails({...exerciseDetails, reps: text})}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </>
+            )}
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Rep</Text>
+              <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Varighet (minutter)</Text>
               <TextInput
-                style={styles.input}
-                placeholder="e.g., 12"
-                value={exerciseDetails.reps}
-                onChangeText={(text) => setExerciseDetails({...exerciseDetails, reps: text})}
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Varighet (minutter)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., 30"
+                style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ddd' }]}
+                placeholder="f.eks., 30"
+                placeholderTextColor={isDarkMode ? '#666' : '#999'}
                 value={exerciseDetails.duration_minutes}
                 onChangeText={(text) => setExerciseDetails({...exerciseDetails, duration_minutes: text})}
                 keyboardType="numeric"
@@ -286,11 +521,12 @@ export default function EditPlanScreen() {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Kommentar</Text>
+              <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Kommentar</Text>
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={[styles.input, styles.textArea, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ddd' }]}
                 placeholder="Tilføy kommentar..."
                 multiline
+                placeholderTextColor={isDarkMode ? '#666' : '#999'}
                 numberOfLines={4}
                 value={exerciseDetails.notes}
                 onChangeText={(text) => setExerciseDetails({...exerciseDetails, notes: text})}
@@ -310,129 +546,3 @@ export default function EditPlanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    marginHorizontal: 16,
-    marginTop: 16,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 24,
-    marginHorizontal: 16,
-  },
-  weekContainer: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  weekCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-
-    elevation: 3,
-    padding: 16,
-  },
-  weekHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  weekTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  weekContent: {
-    marginTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  dayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  dayText: {
-    width: 100,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  exercisesContainer: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  exerciseItem: {
-    marginBottom: 8,
-    alignItems: 'flex-end',
-  },
-  exerciseName: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  exerciseDetails: {
-    fontSize: 12,
-    color: '#666',
-  },
-  addIcon: {
-    marginTop: 8,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    width: '100%',
-    maxWidth: 500,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  closeButton: {
-    fontSize: 24,
-    fontWeight: '400',
-  },
-  formGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  saveButton: {
-    marginTop: 20,
-    backgroundColor: '#7B61FF',
-  },
-}); 

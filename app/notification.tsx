@@ -7,6 +7,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/src/context/AuthContext';
 import { supabase } from '@/src/lib/supabase';
+import { Button } from '../components/Button';
 
 export default function NotificationsScreen() {
   const { notifications, markAllAsRead, refreshNotifications } = useNotifications();
@@ -90,6 +91,16 @@ export default function NotificationsScreen() {
     </View>
   );
 
+  const clearAllNotifications = async () => {
+    try {
+      await supabase.from('notifications').delete().eq('user_id', session?.user?.id);
+      await refreshNotifications();
+      console.log('All notifications cleared');
+    } catch (error) {
+      console.error('Error clearing notifications:', error);
+    }
+  };
+  
   const renderNotification = ({ item }) => {
     const handlePress = () => {
       // Navigate based on notification type
@@ -195,12 +206,25 @@ export default function NotificationsScreen() {
       color: isDarkMode ? '#fff' : '#000',
       marginLeft: 32,
     },
+    clearButtonContainer: {
+      marginTop: 10,
+      marginBottom: 10,
+      marginLeft: 10,
+    },
+    clearButton: {
+      backgroundColor: isDarkMode ? '#2C2C2C' : '#f5f5f5',
+      color: isDarkMode ? '#fff' : '#000',
+    },
   });
   return (
     <>
       <CustomHeader />
       <View style={[styles.container, { backgroundColor: isDarkMode ? '#121212' : '#f5f5f5' }]}>
+        <View style={styles.clearButtonContainer}>
+          <Button title="Clear All" style={styles.clearButton} onPress={clearAllNotifications} />
+        </View>
         {notifications.length > 0 ? (
+          // TODO: Add a clear button
           <FlatList
             data={notifications}
             renderItem={renderNotification}

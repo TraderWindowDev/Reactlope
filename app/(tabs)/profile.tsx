@@ -1,53 +1,49 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, FlatList, Pressable, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { useAuth } from '@/src/context/AuthContext';
-import { supabase } from '@/src/lib/supabase';
-import { Button } from '../../components/Button';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { View, Text, StyleSheet, Image, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
+import { supabase } from '@/src/lib/supabase';
+import { useAuth } from '@/src/context/AuthContext';
+import { format, startOfWeek, endOfWeek } from 'date-fns';
+import { nb } from 'date-fns/locale';
 
-type Profile = {
-  username: string;
-  avatar_url: string;
-  bio: string;
-  followers_count: number;
-  following_count: number;
-};
+const WEEKDAYS = ['M', 'Ti', 'On', 'To', 'Fr', 'Lo', 'Sø'];
 
-type Post = {
-  id: number;
-  image_url: string;
-  likes_count: number;
-  comments_count: number;
-};
-
-export default function ProfileScreen() {
-  const { session, signOut } = useAuth();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function Profile() {
   const { isDarkMode } = useTheme();
+  const { session } = useAuth();
+  const [profile, setProfile] = useState<any>(null);
+  const [weeklyStats, setWeeklyStats] = useState({
+    totalExercises: 0,
+    completedExercises: 0,
+    totalMinutes: 0,
+  });
+  const [exercises, setExercises] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchProfile();
-    fetchUserPosts();
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([
+          fetchProfile(),
+          fetchWeeklyStats()
+        ]);
+      } catch (error) {
+        console.error('Error loading profile data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
   }, []);
 
   const fetchProfile = async () => {
     try {
-      if (!session?.user) return;
-
       const { data, error } = await supabase
         .from('profiles')
-        .select(`
-          username,
-          avatar_url,
-          bio,
-          followers:followers_count,
-          following:following_count
-        `)
-        .eq('id', session.user.id)
+        .select('*')
+        .eq('id', session?.user.id)
         .single();
 
       if (error) throw error;
@@ -57,210 +53,294 @@ export default function ProfileScreen() {
     }
   };
 
-  const fetchUserPosts = async () => {
+  const fetchWeeklyStats = async () => {
     try {
-      if (!session?.user) return;
+      const startDate = startOfWeek(new Date(), { weekStartsOn: 1 });
+      const endDate = endOfWeek(new Date(), { weekStartsOn: 1 });
 
-      const { data, error } = await supabase
-        .from('posts')
-        .select(`
-          *,
-          profile:profiles!user_id (
-            username,
-            avatar_url
-          ),
-          likes:likes(count),
-          comments:comments(count)
-        `)
-        .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false });
+      const { data: userPlans, error: plansError } = await supabase
+        .from('user_training_plans')
+        .select('plan_id')
+        .eq('user_id', session?.user.id);
 
-      if (error) throw error;
+      if (plansError) throw plansError;
 
-      // Transform the data to match our Post type
-      const transformedPosts = data?.map(post => ({
-        id: post.id,
-        image_url: post.image_url || null,
-        likes_count: post.likes?.length || 0,
-        comments_count: post.comments?.length || 0
-      })) || [];
+      if (!userPlans?.length) {
+        setWeeklyStats({
+          totalExercises: 0,
+          completedExercises: 0,
+          totalMinutes: 0,
+        });
+        setExercises([]);
+        return;
+      }
 
-      setPosts(transformedPosts);
+      const planIds = userPlans.map(plan => plan.plan_id);
+      const { data: exercisesData, error: exercisesError } = await supabase
+        .from('training_plan_exercises')
+        .select('*')
+        .in('plan_id', planIds)
+        .neq('type', 'rest')
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString());
+
+      if (exercisesError) throw exercisesError;
+
+      const nonRestExercises = exercisesData || [];
+      setExercises(nonRestExercises);
+
+      const stats = {
+        totalExercises: nonRestExercises.length,
+        completedExercises: nonRestExercises.filter(ex => ex.completed).length,
+        // TODO: Only add completed exercises to total minutes
+        totalMinutes: nonRestExercises.reduce((acc, ex) => acc + (ex.completed ? (ex.duration_minutes || 0) : 0), 0),
+      };
+
+      setWeeklyStats(stats);
     } catch (error) {
-      console.error('Error fetching posts:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error fetching weekly stats:', error);
     }
   };
-
-
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDarkMode ? '#121212' : '#fff',
+    },
+    header: {
+      alignItems: 'center',
+      padding: 20,
+    },
+    avatar: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      marginBottom: 10,
+    },
+    name: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      marginBottom: 5,
+    },
+    level: {
+      fontSize: 16,
+      marginBottom: 20,
+    },
+    statsContainer: {
+      padding: 20,
+    },
+    sectionTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      marginBottom: 15,
+    },
+    statsGrid: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 10,
+    },
+    statBox: {
+      flex: 1,
+      padding: 15,
+      borderRadius: 12,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    statNumber: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      marginBottom: 5,
+    },
+    statLabel: {
+      fontSize: 14,
+    },
+    progressSection: {
+      padding: 20,
+    },
+    progressText: {
+      fontSize: 16,
+      marginBottom: 10,
+    },
+    progressBar: {
+      height: 8,
+      backgroundColor: '#E0E0E0',
+      borderRadius: 4,
+      overflow: 'hidden',
+    },
+    progressFill: {
+      height: '100%',
+      borderRadius: 4,
+    },
+    activityContainer: {
+      marginTop: 20,
+      padding: 20,
+      borderRadius: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    activitySubtitle: {
+      fontSize: 16,
+      marginBottom: 15,
+    },
+    weekIndicator: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginVertical: 10,
+    },
+    dayWrapper: {
+      alignItems: 'center',
+      gap: 8,
+    },
+    dayLabel: {
+      fontSize: 14,
+      fontWeight: '500',
+    },
+    dayIndicator: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      borderWidth: 2,
+      backgroundColor: 'transparent',
+    },
+    activityText: {
+      fontSize: 14,
+      marginTop: 15,
+      textAlign: 'center',
     },
     loadingContainer: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: isDarkMode ? '#121212' : '#fff',
+      backgroundColor: isDarkMode ? '#121212' : '#f5f5f5'
     },
-    
-    header: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingHorizontal: 16,
-      paddingTop: 10,
-      paddingBottom: 10,
-      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
-      borderBottomWidth: 1,
-      borderTopWidth: 1,
-      borderTopColor: isDarkMode ? '#2C2C2C' : '#eee',
-      borderBottomColor: isDarkMode ? '#2C2C2C' : '#eee',
-    },
-    avatar: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-    },
-    stats: {
-      flex: 1,
-      flexDirection: 'row',
-      justifyContent: 'space-around',
-      marginLeft: 16,
-    },
-    statItem: {
-      alignItems: 'center',
-    },
-    statNumber: {
-      fontSize: 18,
-      fontWeight: 'bold',
-      color: isDarkMode ? '#fff' : '#000',
-    },
-    statLabel: {
-      fontSize: 12,
-      color: isDarkMode ? '#999' : '#666',
-    },
-    username: {
+    loadingText: {
       fontSize: 16,
-      paddingTop: 10,
       fontWeight: 'bold',
-      color: isDarkMode ? '#fff' : '#000',
-      paddingHorizontal: 16,
-      marginBottom: 4,
-    },
-    bio: {
-      fontSize: 14,
-      color: isDarkMode ? '#999' : '#666',
-      paddingHorizontal: 16,
-      marginBottom: 16,
-    },
-    editButton: {
-      marginHorizontal: 16,
-      marginBottom: 16,
-      backgroundColor: isDarkMode ? '#0047AB' : '#0047AB',
-    },
-    postThumbnail: {
-      flex: 1/3,
-      aspectRatio: 1,
-    },
-    postImage: {
-      flex: 1,
-      margin: 1,
-    },
-    emptyContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: 32,
-    },
-    emptyTitle: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      marginTop: 16,
-      marginBottom: 8,
-      color: isDarkMode ? '#fff' : '#000',
-    },
-    emptyDescription: {
-      fontSize: 16,
-      color: isDarkMode ? '#999' : '#666',
-      textAlign: 'center',
-    },
-    headerTitle: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      color: isDarkMode ? '#fff' : '#000',
-    },
-    settingsButton: {
-      padding: 8,
     },
   });
+  
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color={isDarkMode ? '#fff' : '#000'} />
       </View>
     );
   }
   return (
-    <View style={styles.container}>
-
+    <ScrollView style={[styles.container, { backgroundColor: isDarkMode ? '#121212' : '#f5f5f5' }]}>
+      
+      {/* Profile Header */}
       <View style={styles.header}>
         <Image
           source={{ uri: profile?.avatar_url || 'https://via.placeholder.com/100' }}
           style={styles.avatar}
         />
-        <View style={styles.stats}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{posts.length}</Text>
-            <Text style={styles.statLabel}>Innlegg</Text>
+        <Text style={[styles.name, { color: isDarkMode ? '#fff' : '#000' }]}>
+          {profile?.full_name || 'Athlete'}
+        </Text>
+        <Text style={[styles.level, { color: isDarkMode ? '#ccc' : '#666' }]}>
+          {profile?.level || 'Beginner'}
+        </Text>
+      </View>
+
+      {/* Weekly Statistics */}
+      <View style={styles.statsContainer}>
+        <Text style={[styles.sectionTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
+          Statistikk denne uken
+        </Text>
+        <View style={styles.statsGrid}>
+          <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#2C2C2C' : '#fff' }]}>
+            <Text style={[styles.statNumber, { color: isDarkMode ? '#fff' : '#000' }]}>
+              {weeklyStats.completedExercises}/{weeklyStats.totalExercises}
+            </Text>
+            <Text style={[styles.statLabel, { color: isDarkMode ? '#ccc' : '#666' }]}>
+              Øvelser fullført
+            </Text>
           </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{profile?.followers_count || 0}</Text>
-            <Text style={styles.statLabel}>Følgere</Text>
+          <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#2C2C2C' : '#fff' }]}>
+            <Text style={[styles.statNumber, { color: isDarkMode ? '#fff' : '#000' }]}>
+              {weeklyStats.totalMinutes}
+            </Text>
+            <Text style={[styles.statLabel, { color: isDarkMode ? '#ccc' : '#666' }]}>
+              Minutter trent
+            </Text>
           </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{profile?.following_count || 0}</Text>
-            <Text style={styles.statLabel}>Følger</Text>
+        </View>
+        <View style={[
+          styles.activityContainer,
+          { backgroundColor: isDarkMode ? '#2C2C2C' : '#fff' }
+        ]}>
+          <Text style={[styles.sectionTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
+            Aktivitet
+          </Text>
+          <Text style={[styles.activitySubtitle, { color: isDarkMode ? '#ccc' : '#666' }]}>
+            Treningsdager
+          </Text>
+          <View style={styles.weekIndicator}>
+            {WEEKDAYS.map((day, index) => {
+              const isActiveDay = exercises?.some(ex => 
+                ex.day_number === index + 1 && 
+                ex.type !== 'rest'
+              );
+              const isCompleted = exercises?.some(ex =>
+                ex.day_number === index + 1 &&
+                ex.type !== 'rest' &&
+                ex.completed
+              );
+
+              return (
+                <View key={day} style={styles.dayWrapper}>
+                  <Text style={[styles.dayLabel, { color: isDarkMode ? '#ccc' : '#666' }]}>
+                    {day}
+                  </Text>
+                  <View 
+                    style={[
+                      styles.dayIndicator,
+                      {
+                        backgroundColor: isCompleted 
+                          ? '#4CAF50' 
+                          : isActiveDay 
+                            ? isDarkMode ? '#404040' : '#E0E0E0'
+                            : 'transparent',
+                        borderColor: isDarkMode ? '#404040' : '#E0E0E0',
+                      }
+                    ]}
+                  />
+                </View>
+              );
+            })}
           </View>
+          <Text style={[styles.activityText, { color: isDarkMode ? '#ccc' : '#666' }]}>
+            {weeklyStats.completedExercises} av {weeklyStats.totalExercises} økter denne uken
+          </Text>
         </View>
       </View>
 
-      <Text style={styles.username}>{profile?.username || 'Username'}</Text>
-      <Text style={styles.bio}>{profile?.bio || 'No bio yet'}</Text>
-
-      <Button
-        title="Rediger profil"
-        onPress={() => router.push('/(profile)/editprofile')}
-        variant="primary"
-        style={styles.editButton}
-      />
-
-      {posts.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="images-outline" size={64} color="#666" />
-          <Text style={styles.emptyTitle}>Ingen innlegg</Text>
-          <Text style={styles.emptyDescription}>
-            Del ditt første bilde!
-          </Text>
+      {/* Progress Section */}
+      <View style={styles.progressSection}>
+        <Text style={[styles.sectionTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
+          Fremgang
+        </Text>
+        <Text style={[styles.progressText, { color: isDarkMode ? '#ccc' : '#666' }]}>
+          {Math.round((weeklyStats.completedExercises / weeklyStats.totalExercises) * 100 || 0)}% av ukens mål nådd
+        </Text>
+        <View style={styles.progressBar}>
+          <View 
+            style={[
+              styles.progressFill,
+              { 
+                width: `${(weeklyStats.completedExercises / weeklyStats.totalExercises) * 100 || 0}%`,
+                backgroundColor: '#7B61FF'
+              }
+            ]} 
+          />
         </View>
-      ) : (
-        <FlatList
-          data={posts}
-          numColumns={3}
-          renderItem={({ item }) => (
-            <Pressable style={styles.postThumbnail}>
-              <Image
-                source={{ uri: item.image_url }}
-                style={styles.postImage}
-              />
-            </Pressable>
-          )}
-          keyExtractor={item => item.id.toString()}
-        />
-      )}
-    </View>
+      </View>
+    </ScrollView>
   );
 }
-

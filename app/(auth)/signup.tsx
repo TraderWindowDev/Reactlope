@@ -10,10 +10,21 @@ export default function SignupScreen() {
 
   const handleSignup = async () => {
     try {
+      if (!email || !password) {
+        alert('Please enter both email and password');
+        return;
+      }
+      
+      if (password.length < 6) {
+        alert('Password must be at least 6 characters long');
+        return;
+      }
+      
       await signUp(email, password);
-      alert('Sign up successful. An email has been sent to you to verify your account.');
-    } catch (error) {
-      alert('Failed to sign up');
+      alert('Sign up successful. Please check your email to verify your account.');
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      alert(error.message || 'Failed to sign up');
     }
   };
 
