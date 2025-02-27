@@ -24,6 +24,7 @@ export default function CalculatorScreen() {
   const [minutes, setMinutes] = useState('50');
   const [seconds, setSeconds] = useState('00');
   const [pace, setPace] = useState('5:00');
+  const [speed, setSpeed] = useState('0.00');
   const [calculationMode, setCalculationMode] = useState<'time' | 'pace'>('time');
   
   // State for picker modals
@@ -49,7 +50,7 @@ export default function CalculatorScreen() {
 
   useEffect(() => {
     calculatePace();
-  }, [distance, hours, minutes, seconds, calculationMode]);
+  }, [distance, hours, minutes, seconds, calculationMode, pace]);
 
   const calculatePace = () => {
     if (calculationMode === 'pace') {
@@ -66,6 +67,12 @@ export default function CalculatorScreen() {
       setHours(calculatedHours.toString());
       setMinutes(calculatedMinutes.toString().padStart(2, '0'));
       setSeconds(calculatedSeconds.toString().padStart(2, '0'));
+      
+      // Calculate speed (km/h)
+      if (totalPaceSeconds > 0) {
+        const speedValue = (3600 / totalPaceSeconds).toFixed(2);
+        setSpeed(speedValue);
+      }
     } else {
       // Calculate pace based on distance and time
       const distanceValue = parseFloat(distance) || 0;
@@ -76,12 +83,28 @@ export default function CalculatorScreen() {
         (parseInt(minutes) * 60) + 
         parseInt(seconds || '0');
       
+      if (totalSeconds === 0) return;
+      
       const paceSeconds = totalSeconds / distanceValue;
       const paceMinutes = Math.floor(paceSeconds / 60);
       const paceRemainingSeconds = Math.floor(paceSeconds % 60);
       
       setPace(`${paceMinutes}:${paceRemainingSeconds.toString().padStart(2, '0')}`);
+      
+      // Calculate speed (km/h)
+      const speedValue = ((distanceValue / totalSeconds) * 3600).toFixed(2);
+      setSpeed(speedValue);
     }
+  };
+
+  const calculateSpeed = () => {
+    const distanceValue = parseFloat(distance) || 0;
+    const totalSeconds = 
+      (parseInt(hours) * 3600) + 
+      (parseInt(minutes) * 60) + 
+      parseInt(seconds || '0');
+    const speed = distanceValue / (totalSeconds / 3600);
+    setSpeed(speed.toFixed(2));
   };
 
   const selectDistanceOption = (value: string) => {
@@ -270,8 +293,8 @@ export default function CalculatorScreen() {
         
         <View style={styles.resultsContainer}>
           <View style={styles.resultItem}>
-            <Text style={[styles.resultLabel, { color: isDarkMode ? '#aaa' : '#666' }]}>
-              Total distanse:
+            <Text style={[styles.resultLabel, { color: isDarkMode ? '#ccc' : '#666' }]}>
+              Distanse:
             </Text>
             <Text style={[styles.resultValue, { color: isDarkMode ? '#fff' : '#000' }]}>
               {distance} km
@@ -279,8 +302,8 @@ export default function CalculatorScreen() {
           </View>
           
           <View style={styles.resultItem}>
-            <Text style={[styles.resultLabel, { color: isDarkMode ? '#aaa' : '#666' }]}>
-              Total tid:
+            <Text style={[styles.resultLabel, { color: isDarkMode ? '#ccc' : '#666' }]}>
+              Tid:
             </Text>
             <Text style={[styles.resultValue, { color: isDarkMode ? '#fff' : '#000' }]}>
               {hours}:{minutes}:{seconds}
@@ -288,11 +311,20 @@ export default function CalculatorScreen() {
           </View>
           
           <View style={styles.resultItem}>
-            <Text style={[styles.resultLabel, { color: isDarkMode ? '#aaa' : '#666' }]}>
+            <Text style={[styles.resultLabel, { color: isDarkMode ? '#ccc' : '#666' }]}>
               Tempo:
             </Text>
             <Text style={[styles.resultValue, { color: isDarkMode ? '#fff' : '#000' }]}>
               {pace} min/km
+            </Text>
+          </View>
+          
+          <View style={styles.resultItem}>
+            <Text style={[styles.resultLabel, { color: isDarkMode ? '#ccc' : '#666' }]}>
+              Hastighet:
+            </Text>
+            <Text style={[styles.resultValue, { color: isDarkMode ? '#fff' : '#000' }]}>
+              {speed} km/t
             </Text>
           </View>
         </View>
