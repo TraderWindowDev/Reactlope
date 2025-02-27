@@ -14,7 +14,8 @@ export default function TabLayout() {
   const navigation = useNavigation();
   const { unreadCount: notificationCount } = useNotifications();
   const { chats = [] } = useMessages();
-  const { isCoach } = useAuth();
+  const { session, userProfile } = useAuth();
+  const isCoach = userProfile?.role === 'coach';
 
   // Calculate total unread messages
   const unreadMessagesCount = chats.reduce((count, chat) => {
@@ -92,6 +93,7 @@ export default function TabLayout() {
           </View>
         ),
       }}
+      initialRouteName="training"
     >
       <Tabs.Screen
         name="index"
@@ -131,11 +133,21 @@ export default function TabLayout() {
           ),
         }}
       />
-
+      <Tabs.Screen
+        name="calculator"
+        options={{
+          title: 'Kalkulator',
+          tabBarLabel: 'Kalkulator',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="calculator-outline" size={size} color={color} />
+          ),
+          href: isCoach ? null : undefined,
+        }}
+      />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: 'Profil',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-outline" size={size} color={color} />
           ),
@@ -150,6 +162,8 @@ export default function TabLayout() {
           ),
         }}
       />
+
+      
     </Tabs>
   );
 }

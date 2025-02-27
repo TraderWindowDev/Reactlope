@@ -8,6 +8,10 @@ import { useAuth } from '../../src/context/AuthContext';
 import { Picker } from '@react-native-picker/picker';
 import { useTheme } from '../../src/context/ThemeContext';
 import { scheduleWorkoutReminder } from '@/src/utils/notifications';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { format } from 'date-fns';
+import { nb } from 'date-fns/locale';
+
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 type ExerciseTemplate = {
@@ -17,16 +21,19 @@ type ExerciseTemplate = {
   sets: number | null;
   reps: number | null;
   duration_minutes: number;
-  type: 'exercise' | 'rest' | 'cardio';
+  type: 'rolig' | 'intervall' | 'hvile' | 'alternativ';
 };
 
 type ExerciseDetails = {
   name: string;
-  description: string;
-  sets: string;
-  reps: string;
+  description?: string;
+  sets?: string;
+  reps?: string;
   duration_minutes: string;
-  type: 'exercise' | 'rest' | 'cardio';
+  type: 'rolig' | 'intervall' | 'hvile' | 'alternativ';
+  distance?: string;
+  week_number: number;
+  day_number: number;
 };
 
 interface Exercise {
@@ -36,54 +43,59 @@ interface Exercise {
   sets: number;
   reps: number;
   duration_minutes: number;
-  type: 'exercise' | 'rest' | 'cardio';
+  type: 'rolig' | 'intervall' | 'hvile' | 'alternativ';
   week_number: number;
   day_number: number;
   completed: boolean;
 }
 
+const defaultExerciseDetails = {
+  name: '',
+  description: '',
+  type: 'rolig' as const,
+  sets: '0',
+  reps: '0',
+  duration_minutes: '',
+  distance: '',
+  week_number: 1,
+  day_number: 1
+};
+
 export default function CreatePlanScreen() {
   const { userId } = useLocalSearchParams();
   const { session } = useAuth();
-  const {isDarkMode} = useTheme();
-  const [expandedWeek, setExpandedWeek] = useState<number | null>(1);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedWeek, setSelectedWeek] = useState<number>(0);
+  const { isDarkMode } = useTheme();
+  const [planId, setPlanId] = useState<number | null>(null);
+  const [planTitle, setPlanTitle] = useState('');
+  const [planDescription, setPlanDescription] = useState('');
+  const [startDate, setStartDate] = useState(new Date());
+  const [exercises, setExercises] = useState<any[]>([]);
+  const [exerciseDetails, setExerciseDetails] = useState(defaultExerciseDetails);
+  const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [selectedDay, setSelectedDay] = useState<string>('');
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [exerciseDetails, setExerciseDetails] = useState<ExerciseDetails>({
-    name: '',
-    description: '',
-    sets: '',
-    reps: '',
-    duration_minutes: '',
-    type: 'exercise'
-  });
-  const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [expandedWeek, setExpandedWeek] = useState<number | null>(1);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [calculatedSpeed, setCalculatedSpeed] = useState<string>('');
   const [templates, setTemplates] = useState<ExerciseTemplate[]>([]);
-  const [showTemplatePrompt, setShowTemplatePrompt] = useState(false);
-  const [exerciseToTemplate, setExerciseToTemplate] = useState<{
-    name: string;
-    description?: string;
-    sets: string;
-    reps: string;
-    duration_minutes: string;
-    type: 'exercise' | 'rest' | 'cardio';
-  } | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchTemplates();
-  }, []);
+  }, [session?.user?.id]);
 
   const fetchTemplates = async () => {
     try {
       const { data, error } = await supabase
         .from('exercise_templates')
         .select('*')
-        .eq('coach_id', session?.user.id);
+        .eq('coach_id', session?.user?.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching templates:', error);
+        return;
+      }
+
       setTemplates(data || []);
     } catch (error) {
       console.error('Error fetching templates:', error);
@@ -149,8 +161,8 @@ export default function CreatePlanScreen() {
         {
           text: 'Yes',
           onPress: () => {
-            setExerciseToTemplate(exercise);
-            setShowTemplatePrompt(true);
+            setExerciseDetails(exercise);
+            setModalVisible(true);
           }
         }
       ]
@@ -164,86 +176,69 @@ export default function CreatePlanScreen() {
     return days.indexOf(day) + 1;
   };
 
+  const createPlan = async () => {
+    try {
+      const { data: plan, error: planError } = await supabase
+        .from('training_plans')
+        .insert({
+          title: planTitle,
+          description: planDescription,
+          coach_id: session?.user?.id,
+          start_date: startDate.toISOString(),
+          duration_weeks: 4
+        })
+        .select()
+        .single();
+
+      if (planError) throw planError;
+      setPlanId(plan.id);
+      return plan.id;
+    } catch (error) {
+      console.error('Error creating plan:', error);
+      throw error;
+    }
+  };
+
   const handleSaveExercise = async () => {
-    // Basic validation
-    if (!exerciseDetails.name.trim()) {
-      Alert.alert('Error', 'Please enter exercise name');
-      return;
-    }
+    try {
+      // Get or create plan ID
+      const currentPlanId = planId || await createPlan();
 
-    if (!exerciseDetails.duration_minutes) {
-      Alert.alert('Error', 'Please enter duration');
-      return;
-    }
-
-    // Only validate sets and reps for exercise type
-    if (exerciseDetails.type === 'exercise') {
-      if (!exerciseDetails.sets || !exerciseDetails.reps) {
-        Alert.alert('Error', 'Please enter sets and reps');
-        return;
+      // Calculate speed if we have both distance and duration
+      let speed = null;
+      if (exerciseDetails.distance && exerciseDetails.duration_minutes) {
+        const distanceNum = parseFloat(exerciseDetails.distance);
+        const durationHours = parseInt(exerciseDetails.duration_minutes) / 60;
+        speed = distanceNum / durationHours;
       }
-    }
 
-    const newExercise = {
-      id: Date.now(),
-      name: exerciseDetails.name.trim(),
-      description: exerciseDetails.description?.trim() || '',
-      sets: exerciseDetails.type === 'exercise' ? parseInt(exerciseDetails.sets) : 0,
-      reps: exerciseDetails.type === 'exercise' ? parseInt(exerciseDetails.reps) : 0,
-      duration_minutes: parseInt(exerciseDetails.duration_minutes),
-      type: exerciseDetails.type,
-      week_number: selectedWeek,
-      day_number: dayToNumber(selectedDay),
-      completed: false,
-      start_time: new Date(new Date().setHours(9, 0, 0, 0)).toISOString() // Default to 9 AM
-    };
+      const exerciseData = {
+        name: exerciseDetails.name.trim(),
+        description: exerciseDetails.description?.trim() || '',
+        sets: exerciseDetails.type === 'intervall' ? parseInt(exerciseDetails.sets || '0') : null,
+        reps: exerciseDetails.type === 'intervall' ? parseInt(exerciseDetails.reps || '0') : null,
+        distance: exerciseDetails.type !== 'hvile' ? parseFloat(exerciseDetails.distance || '0') : null,
+        duration_minutes: parseInt(exerciseDetails.duration_minutes || '0'),
+        speed: speed,
+        type: exerciseDetails.type,
+        week_number: selectedWeek,
+        day_number: WEEKDAYS.indexOf(selectedDay) + 1,
+        plan_id: currentPlanId
+      };
 
-    setExercises(prevExercises => {
-      const updatedExercises = [...prevExercises, newExercise];
-      return updatedExercises;
-    });
+      const { data, error } = await supabase
+        .from('training_plan_exercises')
+        .insert([exerciseData])
+        .select();
 
-    // Schedule notification
-    if (newExercise.type !== 'rest') {
-      try {
-        await scheduleWorkoutReminder(newExercise.id, new Date(newExercise.start_time));
-      } catch (error) {
-        console.error('Error scheduling notification:', error);
-      }
-    }
+      if (error) throw error;
 
-    // Show feedback to user
-    Alert.alert(
-      'Success',
-      `Exercise added to Week ${selectedWeek}, ${selectedDay}`,
-      [{ text: 'OK' }]
-    );
-
-    // Reset form and close modal
-    setExerciseDetails({
-      name: '',
-      description: '',
-      sets: '',
-      reps: '',
-      duration_minutes: '',
-      type: 'exercise'
-    });
-    setModalVisible(false);
-
-    // Template handling can come after the exercise is successfully added
-    const existingTemplate = templates.find(t => 
-      t.name.toLowerCase() === newExercise.name.toLowerCase() &&
-      t.type === newExercise.type &&
-      t.duration_minutes === newExercise.duration_minutes &&
-      (newExercise.type === 'exercise' ? 
-        (t.sets === newExercise.sets &&
-         t.reps === newExercise.reps) :
-        true)
-    );
-
-    if (!existingTemplate) {
-      setExerciseToTemplate(exerciseDetails);
-      setShowTemplatePrompt(true);
+      setExercises([...exercises, ...(data as any[])]);
+      setModalVisible(false);
+      setExerciseDetails(defaultExerciseDetails);
+    } catch (error) {
+      console.error('Error saving exercise:', error);
+      Alert.alert('Error', 'Failed to save exercise');
     }
   };
 
@@ -273,11 +268,11 @@ export default function CreatePlanScreen() {
         .from('training_plans')
         .insert({
           coach_id: session.user.id,  // Use session.user.id instead of user.id
-          title: 'My Training Plan',
-          description: 'Custom training plan',
+          title: planTitle,
+          description: planDescription,
           difficulty: 'beginner',
           duration_weeks: 4,
-          start_date: new Date().toISOString()
+          start_date: startDate.toISOString()
         })
         .select()
         .single();
@@ -356,14 +351,14 @@ export default function CreatePlanScreen() {
 
   const saveAsTemplate = async () => {
     try {
-      // Use exerciseToTemplate instead of exerciseDetails
+      // Use exerciseDetails instead of exerciseToTemplate
       const templateData = {
-        name: exerciseToTemplate.name.trim(),
-        description: exerciseToTemplate.description?.trim() || '',
-        sets: exerciseToTemplate.type === 'rest' ? 0 : parseInt(exerciseToTemplate.sets) || 0,
-        reps: exerciseToTemplate.type === 'rest' ? 0 : parseInt(exerciseToTemplate.reps) || 0,
-        duration_minutes: parseInt(exerciseToTemplate.duration_minutes) || 0,
-        type: exerciseToTemplate.type || 'exercise',
+        name: exerciseDetails.name.trim(),
+        description: exerciseDetails.description?.trim() || '',
+        sets: exerciseDetails.type === 'rest' ? 0 : parseInt(exerciseDetails.sets) || 0,
+        reps: exerciseDetails.type === 'rest' ? 0 : parseInt(exerciseDetails.reps) || 0,
+        duration_minutes: parseInt(exerciseDetails.duration_minutes) || 0,
+        type: exerciseDetails.type || 'exercise',
         coach_id: session?.user.id
       };
 
@@ -388,7 +383,26 @@ export default function CreatePlanScreen() {
       console.error('Error saving template:', error);
       Alert.alert('Error', 'Failed to save template');
     } finally {
-      setShowTemplatePrompt(false);
+      setModalVisible(false);
+    }
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setStartDate(selectedDate);
+    }
+  };
+
+  const calculateSpeed = (distance: string, duration: string) => {
+    const distanceNum = parseFloat(distance);
+    const durationHours = parseInt(duration) / 60; // Convert minutes to hours
+    
+    if (distanceNum && durationHours) {
+      const speed = (distanceNum / durationHours).toFixed(1);
+      setCalculatedSpeed(`${speed} km/t`);
+    } else {
+      setCalculatedSpeed('');
     }
   };
 
@@ -497,6 +511,7 @@ export default function CreatePlanScreen() {
     },
     formGroup: {
       marginBottom: 16,
+      width: '100%',
     },
     label: {
       fontSize: 16,
@@ -511,6 +526,7 @@ export default function CreatePlanScreen() {
       padding: 12,
       fontSize: 16,
       color: isDarkMode ? '#fff' : '#000',
+      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
     },
     textArea: {
       height: 100,
@@ -523,11 +539,12 @@ export default function CreatePlanScreen() {
       marginTop: 2,
     },
     picker: {
-      color: isDarkMode ? '#fff' : '#000',
+      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
       borderWidth: 1,
-      borderRadius: 8,
-      backgroundColor: isDarkMode ? '#2C2C2C' : '#fff',
       borderColor: isDarkMode ? '#2C2C2C' : '#ddd',
+      borderRadius: 8,
+      marginBottom: 16,
+      color: isDarkMode ? '#fff' : '#000',
     },
     buttonRow: {
       flexDirection: 'row',
@@ -562,6 +579,40 @@ export default function CreatePlanScreen() {
       color: isDarkMode ? '#aaa' : '#666',
       marginTop: 4,
     },
+    dateButton: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 12,
+      backgroundColor: '#fff',
+      borderRadius: 8,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: '#ddd',
+    },
+    dateButtonText: {
+      fontSize: 16,
+      color: '#000',
+    },
+    darkInput: {
+      backgroundColor: '#2C2C2C',
+      borderColor: '#444',
+      color: '#fff',
+    },
+    darkText: {
+      color: isDarkMode ? '#fff' : '#000',
+    },
+    speedDisplay: {
+      padding: 12,
+      backgroundColor: isDarkMode ? '#2C2C2E' : '#f5f5f5',
+      borderRadius: 8,
+      marginTop: 8,
+    },
+    speedText: {
+      color: isDarkMode ? '#fff' : '#000',
+      fontSize: 14,
+      textAlign: 'center',
+    },
   }); 
 
   return (
@@ -571,6 +622,54 @@ export default function CreatePlanScreen() {
           <Text style={styles.title}>Create Plan</Text>
           <Text style={styles.subtitle}>Design a 4-week training program</Text>
 
+          <Pressable 
+            style={[styles.dateButton, isDarkMode && styles.darkInput]}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Text style={[styles.dateButtonText, isDarkMode && styles.darkText]}>
+              Startdato: {format(startDate, 'd. MMMM yyyy', { locale: nb })}
+            </Text>
+            <Ionicons 
+              name="calendar-outline" 
+              size={24} 
+              color={isDarkMode ? '#fff' : '#000'} 
+            />
+          </Pressable>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={startDate}
+              mode="date"
+              display="default"
+              onChange={onDateChange}
+              minimumDate={new Date()}
+            />
+          )}
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>
+              Treningsplan beskrivelse
+            </Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Hva er denne treningsplanen for?"
+              value={planDescription}
+              onChangeText={(text) => setPlanDescription(text)}
+              placeholderTextColor={isDarkMode ? '#666' : '#666'}
+              multiline
+            />
+          </View>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>
+              Treningsplan navn
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Marathon 2025"
+              value={planTitle}
+              onChangeText={(text) => setPlanTitle(text)}
+              placeholderTextColor={isDarkMode ? '#666' : '#666'}
+            />
+          </View>
           {[1, 2, 3, 4].map((weekNumber) => (
             <View key={weekNumber} style={styles.weekContainer}>
               <Pressable 
@@ -628,35 +727,17 @@ export default function CreatePlanScreen() {
                     setExerciseDetails({
                       ...exerciseDetails,
                       type: value,
-                      // Reset sets and reps if type is rest or cardio
-                      sets: value === 'rest' ? '0' : exerciseDetails.sets,
-                      reps: value === 'rest' ? '0' : exerciseDetails.reps,
+                      // Reset fields based on type
+                      sets: value === 'intervall' ? exerciseDetails.sets : '0',
+                      reps: value === 'intervall' ? exerciseDetails.reps : '0',
+                      distance: value === 'hvile' ? '0' : exerciseDetails.distance,
                     });
                   }}
                 >
-                  <Picker.Item label="Exercise" value="exercise" />
-                  <Picker.Item label="Rest" value="rest" />
-                  <Picker.Item label="Cardio" value="cardio" />
-                </Picker>
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>
-                  Select Template (Optional)
-                </Text>
-                <Picker
-                  selectedValue=""
-                  onValueChange={(itemValue) => handleTemplateSelection(Number(itemValue))}
-                  style={{ color: isDarkMode ? '#fff' : '#000' }}
-                >
-                  <Picker.Item label="Select a template..." value="" />
-                  {templates.map(template => (
-                    <Picker.Item 
-                      key={template.id.toString()}
-                      label={`${template.name} (${template.type})`}
-                      value={template.id.toString()}
-                    />
-                  ))}
+                  <Picker.Item label="Rolig" value="rolig" />
+                  <Picker.Item label="Intervall" value="intervall" />
+                  <Picker.Item label="Hvile" value="hvile" />
+                  <Picker.Item label="Alternativ" value="alternativ" />
                 </Picker>
               </View>
 
@@ -664,68 +745,119 @@ export default function CreatePlanScreen() {
                 <Text style={styles.label}>Navn</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g., sprint eller Pause"
+                  placeholder="f.eks., Sprint"
                   value={exerciseDetails.name}
                   onChangeText={(text) => setExerciseDetails({...exerciseDetails, name: text})}
-                  placeholderTextColor={isDarkMode ? '#666' : '#666'}
                 />
               </View>
 
+              {exerciseDetails.type !== 'hvile' && (
+                <>
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Distanse (km)</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="f.eks., 5.5"
+                      value={exerciseDetails.distance}
+                      onChangeText={(text) => {
+                        setExerciseDetails({...exerciseDetails, distance: text});
+                        calculateSpeed(text, exerciseDetails.duration_minutes);
+                      }}
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Varighet (minutter)</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="f.eks., 30"
+                      value={exerciseDetails.duration_minutes}
+                      onChangeText={(text) => {
+                        setExerciseDetails({...exerciseDetails, duration_minutes: text});
+                        calculateSpeed(exerciseDetails.distance || '0', text);
+                      }}
+                      keyboardType="numeric"
+                    />
+                  </View>
+
+                  {calculatedSpeed && (
+                    <View style={styles.speedDisplay}>
+                      <Text style={styles.speedText}>Gjennomsnittsfart: {calculatedSpeed}</Text>
+                    </View>
+                  )}
+                </>
+              )}
+
+              {exerciseDetails.type === 'intervall' && (
+                <>
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Set</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="f.eks., 3"
+                      value={exerciseDetails.sets}
+                      onChangeText={(text) => setExerciseDetails({...exerciseDetails, sets: text})}
+                      keyboardType="numeric"
+                    />
+                  </View>
+
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Rep</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="f.eks., 12"
+                      value={exerciseDetails.reps}
+                      onChangeText={(text) => setExerciseDetails({...exerciseDetails, reps: text})}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </>
+              )}
+
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Description (Optional)</Text>
+                <Text style={styles.label}>Beskrivelse (valgfritt)</Text>
                 <TextInput
                   style={[styles.input, styles.textArea]}
                   placeholder="Legg til beskrivelse eller notater"
                   value={exerciseDetails.description}
                   onChangeText={(text) => setExerciseDetails({...exerciseDetails, description: text})}
                   multiline
-                  placeholderTextColor={isDarkMode ? '#666' : '#666'}
                 />
               </View>
 
-              {exerciseDetails.type !== 'rest' && (
-                <>
-                  {exerciseDetails.type === 'exercise' && (
-                    <>
-                      <View style={styles.formGroup}>
-                        <Text style={styles.label}>Sets</Text>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="e.g., 3"
-                          value={exerciseDetails.sets}
-                          onChangeText={(text) => setExerciseDetails({...exerciseDetails, sets: text})}
-                          keyboardType="numeric"
-                          placeholderTextColor={isDarkMode ? '#666' : '#666'}
-                        />
-                      </View>
-
-                      <View style={styles.formGroup}>
-                        <Text style={styles.label}>Reps</Text>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="e.g., 12"
-                          value={exerciseDetails.reps}
-                          onChangeText={(text) => setExerciseDetails({...exerciseDetails, reps: text})}
-                          keyboardType="numeric"
-                          placeholderTextColor={isDarkMode ? '#666' : '#666'}
-                        />
-                      </View>
-                    </>
-                  )}
-
-                  <View style={styles.formGroup}>
-                    <Text style={styles.label}>Duration (minutes)</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="e.g., 30"
-                      value={exerciseDetails.duration_minutes}
-                      onChangeText={(text) => setExerciseDetails({...exerciseDetails, duration_minutes: text})}
-                      keyboardType="numeric"
-                      placeholderTextColor={isDarkMode ? '#666' : '#666'}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Velg fra maler</Text>
+                <Picker
+                  selectedValue=""
+                  style={styles.picker}
+                  onValueChange={(templateId) => {
+                    if (templateId) {
+                      const template = templates.find(t => t.id === parseInt(templateId));
+                      if (template) {
+                        setExerciseDetails({
+                          ...exerciseDetails,
+                          name: template.name,
+                          description: template.description,
+                          type: template.type,
+                          sets: template.sets?.toString() || '0',
+                          reps: template.reps?.toString() || '0',
+                          duration_minutes: template.duration_minutes?.toString() || '0',
+                        });
+                      }
+                    }
+                  }}
+                >
+                  <Picker.Item label="Velg mal..." value="" />
+                  {templates.map(template => (
+                    <Picker.Item 
+                      key={template.id} 
+                      label={template.name} 
+                      value={template.id.toString()} 
                     />
-                  </View>
-                </>
-              )}
+                  ))}
+                </Picker>
+              </View>
 
               <Button
                 title="Legg til øvelse"
@@ -733,38 +865,6 @@ export default function CreatePlanScreen() {
                 style={styles.saveButton}
               />
             </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal
-        visible={showTemplatePrompt}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowTemplatePrompt(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: isDarkMode ? '#1E1E1E' : '#fff' }]}>
-            <Text style={[styles.modalTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
-              Lagre som mal?
-            </Text>
-            <Text style={[styles.modalText, { color: isDarkMode ? '#fff' : '#000' }]}>
-              Vil du lagre denne øvelsen som en mal for fremtidig bruk?
-            </Text>
-            <View style={styles.buttonRow}>
-              <Button
-                title="Nei"
-                onPress={() => setShowTemplatePrompt(false)}
-                style={styles.cancelButton}
-                textStyle={{ color: isDarkMode ? '#fff' : '#000' }}
-              />
-              <Button
-                title="Lag mal"
-                onPress={saveAsTemplate}
-                style={styles.saveButton}
-                textStyle={{ color: isDarkMode ? '#fff' : '#000' }}
-              />
-            </View>
           </View>
         </View>
       </Modal>

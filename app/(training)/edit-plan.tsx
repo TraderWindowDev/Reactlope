@@ -19,7 +19,7 @@ type Exercise = {
   duration_minutes: number;
   week_number: number;
   day_number: number;
-  notes: string;
+  description: string;
   plan_id: number;
   type: 'exercise' | 'rest' | 'cardio';
 };
@@ -37,7 +37,8 @@ export default function EditPlanScreen() {
     sets: '',
     reps: '',
     duration_minutes: '',
-    notes: '',
+    distance: '',
+    description: '',
     type: 'exercise' as const
   });
   const [selectedWeek, setSelectedWeek] = useState<number>(1);
@@ -126,7 +127,8 @@ export default function EditPlanScreen() {
       sets: '',
       reps: '',
       duration_minutes: '',
-      notes: '',
+      distance: '',
+      description: '',
       type: 'exercise'
     });
     setModalVisible(true);
@@ -139,7 +141,8 @@ export default function EditPlanScreen() {
       sets: exercise.sets?.toString() || '',
       reps: exercise.reps?.toString() || '',
       duration_minutes: exercise.duration_minutes.toString(),
-      notes: exercise.notes,
+      distance: exercise.distance || '',
+      description: exercise.notes,
       type: exercise.type
     });
     setModalVisible(true);
@@ -162,35 +165,41 @@ export default function EditPlanScreen() {
         return;
       }
 
+      // Calculate speed automatically if we have both distance and duration
+      let speed = null;
+      if (exerciseDetails.distance && exerciseDetails.duration_minutes) {
+        const distanceKm = parseFloat(exerciseDetails.distance);
+        const durationHours = parseInt(exerciseDetails.duration_minutes) / 60;
+        speed = (distanceKm / durationHours).toFixed(2); // Round to 2 decimal places
+      }
+
       const exerciseData = {
         name: exerciseDetails.name,
         sets: exerciseDetails.type === 'exercise' ? parseInt(exerciseDetails.sets) : 0,
         reps: exerciseDetails.type === 'exercise' ? parseInt(exerciseDetails.reps) : 0,
         duration_minutes: parseInt(exerciseDetails.duration_minutes) || 0,
-        notes: exerciseDetails.notes,
+        distance: parseFloat(exerciseDetails.distance) || 0,
+        speed: speed ? parseFloat(speed) : null, // Store calculated speed
+        description: exerciseDetails.description,
         type: exerciseDetails.type,
         plan_id: planId,
         week_number: selectedWeek,
         day_number: selectedDay,
-        start_time: new Date(new Date().setHours(9, 0, 0, 0)).toISOString() // Default to 9 AM
+        start_time: new Date().toISOString() // Format: "2024-01-23T09:00:00.000Z"
       };
 
+      let savedExercise;
+
       if (selectedExercise?.id) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('training_plan_exercises')
           .update(exerciseData)
-          .eq('id', selectedExercise.id);
+          .eq('id', selectedExercise.id)
+          .select()
+          .single();
 
         if (error) throw error;
-
-        // Schedule notification for updated exercise
-        if (exerciseData.type !== 'rest') {
-          try {
-            await scheduleWorkoutReminder(selectedExercise.id, new Date(exerciseData.start_time));
-          } catch (error) {
-            console.error('Error scheduling notification:', error);
-          }
-        }
+        savedExercise = data;
       } else {
         const { data, error } = await supabase
           .from('training_plan_exercises')
@@ -199,14 +208,15 @@ export default function EditPlanScreen() {
           .single();
 
         if (error) throw error;
+        savedExercise = data;
+      }
 
-        // Schedule notification for new exercise
-        if (exerciseData.type !== 'rest' && data) {
-          try {
-            await scheduleWorkoutReminder(data.id, new Date(exerciseData.start_time));
-          } catch (error) {
-            console.error('Error scheduling notification:', error);
-          }
+      // Schedule notification after successful save
+      if (savedExercise && exerciseData.type !== 'rest') {
+        try {
+          await scheduleWorkoutReminder(savedExercise.id, new Date());
+        } catch (notificationError) {
+          console.error('Error scheduling notification:', notificationError);
         }
       }
 
@@ -345,6 +355,10 @@ export default function EditPlanScreen() {
       marginTop: 20,
       backgroundColor: '#0047AB',
     },
+    picker: {
+      color: isDarkMode ? '#fff' : '#000',
+      backgroundColor: isDarkMode ? '#2C2C2C' : '#fff',
+    },
   }); 
 
   return (
@@ -428,14 +442,41 @@ export default function EditPlanScreen() {
               <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Type</Text>
               <Picker
                 selectedValue={exerciseDetails.type}
+                style={[styles.picker, { color: isDarkMode ? '#fff' : '#000' }]}
                 onValueChange={(value) => setExerciseDetails({...exerciseDetails, type: value})}
-                style={{ color: isDarkMode ? '#fff' : '#000', backgroundColor: isDarkMode ? '#2C2C2C' : '#fff'}}
               >
-                <Picker.Item label="Exercise" value="exercise" />
-                <Picker.Item label="Rest" value="rest" />
-                <Picker.Item label="Cardio" value="cardio" />
+                <Picker.Item label="Rolig" value="rolig" />
+                <Picker.Item label="Intervall" value="intervall" />
+                <Picker.Item label="Hvile" value="hvile" />
+                <Picker.Item label="Alternativ" value="alternativ" />
               </Picker>
             </View>
+
+            {exerciseDetails.type === 'intervall' && (
+              <>
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Set</Text>
+                  <TextInput
+                    style={[styles.input, { color: isDarkMode ? '#fff' : '#000' }]}
+                    placeholder="f.eks., 3"
+                    value={exerciseDetails.sets}
+                    onChangeText={(text) => setExerciseDetails({...exerciseDetails, sets: text})}
+                    keyboardType="numeric"
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Rep</Text>
+                  <TextInput
+                    style={[styles.input, { color: isDarkMode ? '#fff' : '#000' }]}
+                    placeholder="f.eks., 12"
+                    value={exerciseDetails.reps}
+                    onChangeText={(text) => setExerciseDetails({...exerciseDetails, reps: text})}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </>
+            )}
 
             <View style={styles.formGroup}>
               <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Velg en mal (valgfritt)</Text>
@@ -450,7 +491,8 @@ export default function EditPlanScreen() {
                       sets: template.sets?.toString() || '0',
                       reps: template.reps?.toString() || '0',
                       duration_minutes: template.duration_minutes.toString(),
-                      notes: template.notes || '',
+                      distance: template.distance || '',
+                      description: template.description || '',
                       type: template.type
                     });
                   }
@@ -480,34 +522,6 @@ export default function EditPlanScreen() {
               />
             </View>
 
-            {exerciseDetails.type === 'exercise' && (
-              <>
-                <View style={styles.formGroup}>
-                  <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Set</Text>
-                  <TextInput
-                    style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ddd' }]}
-                    placeholder="f.eks., 3"
-                    placeholderTextColor={isDarkMode ? '#666' : '#999'}
-                    value={exerciseDetails.sets}
-                    onChangeText={(text) => setExerciseDetails({...exerciseDetails, sets: text})}
-                    keyboardType="numeric"
-                  />
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Rep</Text>
-                  <TextInput
-                    style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ddd' }]}
-                    placeholder="f.eks., 12"
-                    placeholderTextColor={isDarkMode ? '#666' : '#999'}
-                    value={exerciseDetails.reps}
-                    onChangeText={(text) => setExerciseDetails({...exerciseDetails, reps: text})}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </>
-            )}
-
             <View style={styles.formGroup}>
               <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Varighet (minutter)</Text>
               <TextInput
@@ -521,6 +535,18 @@ export default function EditPlanScreen() {
             </View>
 
             <View style={styles.formGroup}>
+              <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Distanse (km)</Text>
+              <TextInput
+                style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ddd' }]}
+                placeholder="f.eks., 5"
+                placeholderTextColor={isDarkMode ? '#666' : '#999'}
+                value={exerciseDetails.distance}
+                onChangeText={(text) => setExerciseDetails({...exerciseDetails, distance: text})}
+                keyboardType="numeric"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
               <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Kommentar</Text>
               <TextInput
                 style={[styles.input, styles.textArea, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ddd' }]}
@@ -528,8 +554,8 @@ export default function EditPlanScreen() {
                 multiline
                 placeholderTextColor={isDarkMode ? '#666' : '#999'}
                 numberOfLines={4}
-                value={exerciseDetails.notes}
-                onChangeText={(text) => setExerciseDetails({...exerciseDetails, notes: text})}
+                value={exerciseDetails.description}
+                onChangeText={(text) => setExerciseDetails({...exerciseDetails, description: text})}
               />
             </View>
 

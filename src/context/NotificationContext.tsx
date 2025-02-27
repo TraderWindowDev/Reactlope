@@ -23,6 +23,7 @@ type NotificationContextType = {
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   refreshNotifications: () => Promise<void>;
+  sendPushNotification: (token: string, title: string, body: string, data: any) => Promise<any>;
 };
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -118,6 +119,31 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  const sendPushNotification = async (token, title, body, data) => {
+    try {
+      const response = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: token,
+          title,
+          body,
+          data,
+          sound: 'default',
+          badge: 1,
+        }),
+      });
+      
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Error sending push notification:', error);
+      return null;
+    }
+  };
+
   return (
     <NotificationContext.Provider value={{
       notifications,
@@ -136,7 +162,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }
       },
       markAllAsRead,
-      refreshNotifications: fetchNotifications
+      refreshNotifications: fetchNotifications,
+      sendPushNotification
     }}>
       {children}
     </NotificationContext.Provider>

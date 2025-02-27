@@ -3,10 +3,9 @@ import { useAuth } from '@/src/context/AuthContext';
 import { View, ActivityIndicator } from 'react-native';
 
 export default function Index() {
-  const { isCoach, session, loading } = useAuth();
+  const { session, loading } = useAuth();
   
-  // Wait for auth and role to be initialized
-  if (loading || !session) {
+  if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" />
@@ -14,12 +13,12 @@ export default function Index() {
     );
   }
 
-  console.log('Index redirect - isCoach:', isCoach, 'loading:', loading);
-  
-  // Only redirect when we're sure about the role
-  if (isCoach) {
-    return <Redirect href="/(tabs)/coachfeed" />;
+  // If no session, redirect to login
+  if (!session) {
+    return <Redirect href="/login" />;
   }
+
+  // If authenticated, redirect to training
   return <Redirect href="/(tabs)/training" />;
 }
 

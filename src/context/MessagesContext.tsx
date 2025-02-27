@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { AppState, AppStateStatus } from 'react-native';
 
 const MessagesContext = createContext({});
 
@@ -14,15 +15,56 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isCoach, setIsCoach] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const subscriptionRef = useRef<any>(null);
+  const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
     if (session?.user?.id) {
       checkCoachStatus();
       fetchChats();
+      setupSubscription();
       const cleanup = subscribeToMessages();
       return () => cleanup();
     }
   }, [session?.user?.id]);
+
+  const setupSubscription = async () => {
+    if (subscriptionRef.current) {
+      subscriptionRef.current.unsubscribe();
+    }
+
+    
+    subscriptionRef.current = supabase
+      .channel('messages-channel')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'messages' }, 
+        (payload) => {
+          fetchChats();
+        }
+      )
+      .subscribe((status) => {
+        console.log('Messages subscription status:', status);
+      });
+  };
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (
+        appStateRef.current.match(/inactive|background/) && 
+        nextAppState === 'active'
+      ) {
+        console.log('App has come to the foreground, refreshing subscriptions');
+        setupSubscription();
+        fetchChats();
+      }
+      
+      appStateRef.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   const subscribeToMessages = () => {
     const channel = supabase.channel(`messages_${session.user.id}`);

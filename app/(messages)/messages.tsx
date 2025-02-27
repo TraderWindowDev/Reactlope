@@ -25,7 +25,6 @@ export default function MessagesScreen() {
     
     const subscription = userChannel
       .on('broadcast', { event: 'new_message' }, () => {
-        console.log('Message list received broadcast, refreshing chats...');
         refreshChats();
       })
       .subscribe();
@@ -98,7 +97,7 @@ export default function MessagesScreen() {
     );
   };
 
-  const renderChat = ({ item }) => (
+  const renderChat = ({ item }: { item: any }) => (
     <Pressable 
       style={[
         styles.chatItem,
@@ -225,7 +224,7 @@ export default function MessagesScreen() {
           style={styles.backButton}
           onPress={() => router.back()}
         />
-        <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>Messages</Text>
+        <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>Meldinger</Text>
       </View>
 
       <View style={[styles.container, { backgroundColor: isDarkMode ? '#121212' : '#f5f5f5' }]}>
@@ -243,7 +242,7 @@ export default function MessagesScreen() {
                   color={isDarkMode ? '#666' : '#999'} 
                 />
                 <Text style={[styles.emptyText, { color: isDarkMode ? '#fff' : '#000' }]}>
-                  No subscribed users yet
+                  Ingen brukere abonnert enda
                 </Text>
               </View>
             }
@@ -262,7 +261,7 @@ export default function MessagesScreen() {
                   color={isDarkMode ? '#666' : '#999'} 
                 />
                 <Text style={[styles.emptyText, { color: isDarkMode ? '#fff' : '#000' }]}>
-                  No messages yet
+                  Ingen meldinger enda
                 </Text>
               </View>
             }

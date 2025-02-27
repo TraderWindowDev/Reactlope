@@ -5,7 +5,10 @@ import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/context/AuthContext';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { nb } from 'date-fns/locale';
+import { LineChart } from 'react-native-chart-kit';
+import { Dimensions } from 'react-native';
 
+const screenWidth = Dimensions.get('window').width;
 const WEEKDAYS = ['M', 'Ti', 'On', 'To', 'Fr', 'Lo', 'Sø'];
 
 export default function Profile() {
@@ -16,9 +19,20 @@ export default function Profile() {
     totalExercises: 0,
     completedExercises: 0,
     totalMinutes: 0,
+    totalDistance: 0,
   });
   const [exercises, setExercises] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activityData, setActivityData] = useState({
+    labels: WEEKDAYS,
+    datasets: [
+      {
+        data: [0, 0, 0, 0, 0, 0, 0],
+        color: (opacity = 1) => `rgba(123, 97, 255, ${opacity})`,
+        strokeWidth: 2
+      }
+    ]
+  });
 
   useEffect(() => {
     const loadData = async () => {
@@ -26,7 +40,8 @@ export default function Profile() {
       try {
         await Promise.all([
           fetchProfile(),
-          fetchWeeklyStats()
+          fetchWeeklyStats(),
+          fetchActivityData()
         ]);
       } catch (error) {
         console.error('Error loading profile data:', error);
@@ -53,54 +68,150 @@ export default function Profile() {
     }
   };
 
-  const fetchWeeklyStats = async () => {
+  const fetchActivityData = async () => {
     try {
+      // Get the current week's start and end dates
       const startDate = startOfWeek(new Date(), { weekStartsOn: 1 });
       const endDate = endOfWeek(new Date(), { weekStartsOn: 1 });
-
+      
+      // First get the user's training plans
       const { data: userPlans, error: plansError } = await supabase
         .from('user_training_plans')
         .select('plan_id')
         .eq('user_id', session?.user.id);
 
-      if (plansError) throw plansError;
+      if (plansError || !userPlans?.length) {
+        console.log('No plans found or error:', plansError);
+        return;
+      }
+
+      const planIds = userPlans.map(plan => plan.plan_id);
+      
+      // Get exercises for the current week
+      const { data: exercisesData, error: exercisesError } = await supabase
+        .from('training_plan_exercises')
+        .select('*')
+        .in('plan_id', planIds)
+        .neq('type', 'rest');
+
+      if (exercisesError || !exercisesData) {
+        console.log('No exercises found or error:', exercisesError);
+        return;
+      }
+
+      console.log('Found exercises:', exercisesData.length);
+
+      // Prepare data for the chart - use distance if available, otherwise duration
+      const dailyData = [0, 0, 0, 0, 0, 0, 0]; // One for each day of the week
+      
+      exercisesData.forEach(exercise => {
+        if (exercise.day_number >= 1 && exercise.day_number <= 7) {
+          // Add distance or duration to the corresponding day
+          const dayIndex = exercise.day_number - 1;
+          if (exercise.distance) {
+            dailyData[dayIndex] += parseFloat(exercise.distance) || 0;
+          } else if (exercise.duration_minutes) {
+            // If no distance, use duration as a fallback
+            dailyData[dayIndex] += exercise.duration_minutes / 10; // Scale down to make it visible
+          }
+        }
+      });
+      
+      console.log('Chart data:', dailyData);
+      
+      setActivityData({
+        labels: WEEKDAYS,
+        datasets: [
+          {
+            data: dailyData,
+            color: (opacity = 1) => isDarkMode 
+              ? `rgba(123, 97, 255, ${opacity})` 
+              : `rgba(123, 97, 255, ${opacity})`,
+            strokeWidth: 2
+          }
+        ]
+      });
+      
+    } catch (error) {
+      console.error('Error fetching activity data:', error);
+    }
+  };
+
+  const fetchWeeklyStats = async () => {
+    try {
+      // Get the current week's start and end dates
+      const startDate = startOfWeek(new Date(), { weekStartsOn: 1 });
+      const endDate = endOfWeek(new Date(), { weekStartsOn: 1 });
+      
+      console.log('Fetching stats for week:', startDate.toISOString(), 'to', endDate.toISOString());
+
+      // First get the user's training plans
+      const { data: userPlans, error: plansError } = await supabase
+        .from('user_training_plans')
+        .select('plan_id')
+        .eq('user_id', session?.user.id);
+
+      if (plansError) {
+        console.error('Error fetching user plans:', plansError);
+        throw plansError;
+      }
 
       if (!userPlans?.length) {
+        console.log('No training plans found for user');
         setWeeklyStats({
           totalExercises: 0,
           completedExercises: 0,
           totalMinutes: 0,
+          totalDistance: 0,
         });
         setExercises([]);
         return;
       }
 
       const planIds = userPlans.map(plan => plan.plan_id);
+      console.log('User has plans:', planIds);
+      
+      // Get exercises for the current week
       const { data: exercisesData, error: exercisesError } = await supabase
         .from('training_plan_exercises')
         .select('*')
         .in('plan_id', planIds)
-        .neq('type', 'rest')
-        .gte('created_at', startDate.toISOString())
-        .lte('created_at', endDate.toISOString());
+        .neq('type', 'rest');
 
-      if (exercisesError) throw exercisesError;
+      if (exercisesError) {
+        console.error('Error fetching exercises:', exercisesError);
+        throw exercisesError;
+      }
 
-      const nonRestExercises = exercisesData || [];
-      setExercises(nonRestExercises);
+      // Filter exercises for the current week based on day_number
+      const currentWeekExercises = exercisesData?.filter(exercise => {
+        // Include all exercises for the current week
+        return exercise.day_number >= 1 && exercise.day_number <= 7;
+      }) || [];
+      
+      console.log('Current week exercises:', currentWeekExercises.length);
+      
+      setExercises(currentWeekExercises);
+
+      // Calculate total distance (assuming there's a distance field)
+      const totalDistance = currentWeekExercises.reduce((acc, ex) => 
+        acc + (ex.completed && ex.distance ? parseFloat(ex.distance) : 0), 0);
 
       const stats = {
-        totalExercises: nonRestExercises.length,
-        completedExercises: nonRestExercises.filter(ex => ex.completed).length,
-        // TODO: Only add completed exercises to total minutes
-        totalMinutes: nonRestExercises.reduce((acc, ex) => acc + (ex.completed ? (ex.duration_minutes || 0) : 0), 0),
+        totalExercises: currentWeekExercises.length,
+        completedExercises: currentWeekExercises.filter(ex => ex.completed).length,
+        totalMinutes: currentWeekExercises.reduce((acc, ex) => 
+          acc + (ex.completed ? (ex.duration_minutes || 0) : 0), 0),
+        totalDistance: totalDistance,
       };
 
+      console.log('Weekly stats:', stats);
       setWeeklyStats(stats);
     } catch (error) {
       console.error('Error fetching weekly stats:', error);
     }
   };
+
   const styles = StyleSheet.create({
     container: {
       flex: 1,
@@ -222,12 +333,46 @@ export default function Profile() {
       fontSize: 16,
       fontWeight: 'bold',
     },
+    todayText: {
+      fontWeight: 'bold',
+    },
+    todayIndicator: {
+      borderColor: '#7B61FF',
+    },
+    chartContainer: {
+      padding: 20,
+    },
+    statsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 10,
+    },
+    statItem: {
+      alignItems: 'center',
+    },
+    statValue: {
+      fontSize: 16,
+      fontWeight: 'bold',
+    },
+    chartCard: {
+      padding: 20,
+      margin:20,
+      borderRadius: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
   });
   
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, { backgroundColor: isDarkMode ? '#121212' : '#f5f5f5' }]}>
         <ActivityIndicator size="large" color={isDarkMode ? '#fff' : '#000'} />
+        <Text style={[styles.loadingText, { color: isDarkMode ? '#fff' : '#000' }]}>
+          Laster profil...
+        </Text>
       </View>
     );
   }
@@ -253,6 +398,7 @@ export default function Profile() {
         <Text style={[styles.sectionTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
           Statistikk denne uken
         </Text>
+        
         <View style={styles.statsGrid}>
           <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#2C2C2C' : '#fff' }]}>
             <Text style={[styles.statNumber, { color: isDarkMode ? '#fff' : '#000' }]}>
@@ -283,19 +429,25 @@ export default function Profile() {
           </Text>
           <View style={styles.weekIndicator}>
             {WEEKDAYS.map((day, index) => {
+              const dayNumber = index + 1;
+              const isToday = new Date().getDay() === (dayNumber === 7 ? 0 : dayNumber);
               const isActiveDay = exercises?.some(ex => 
-                ex.day_number === index + 1 && 
+                ex.day_number === dayNumber && 
                 ex.type !== 'rest'
               );
               const isCompleted = exercises?.some(ex =>
-                ex.day_number === index + 1 &&
+                ex.day_number === dayNumber &&
                 ex.type !== 'rest' &&
                 ex.completed
               );
 
               return (
                 <View key={day} style={styles.dayWrapper}>
-                  <Text style={[styles.dayLabel, { color: isDarkMode ? '#ccc' : '#666' }]}>
+                  <Text style={[
+                    styles.dayLabel, 
+                    { color: isDarkMode ? '#ccc' : '#666' },
+                    isToday && styles.todayText
+                  ]}>
                     {day}
                   </Text>
                   <View 
@@ -308,7 +460,8 @@ export default function Profile() {
                             ? isDarkMode ? '#404040' : '#E0E0E0'
                             : 'transparent',
                         borderColor: isDarkMode ? '#404040' : '#E0E0E0',
-                      }
+                      },
+                      isToday && styles.todayIndicator
                     ]}
                   />
                 </View>
@@ -321,26 +474,73 @@ export default function Profile() {
         </View>
       </View>
 
-      {/* Progress Section */}
-      <View style={styles.progressSection}>
+    
+
+      {/* Activity Chart */}
+      <View style={[
+        styles.chartCard,
+        { backgroundColor: isDarkMode ? '#2C2C2C' : '#fff', marginTop: 16 }
+      ]}>
         <Text style={[styles.sectionTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
-          Fremgang
+          Denne uken
         </Text>
-        <Text style={[styles.progressText, { color: isDarkMode ? '#ccc' : '#666' }]}>
-          {Math.round((weeklyStats.completedExercises / weeklyStats.totalExercises) * 100 || 0)}% av ukens mål nådd
-        </Text>
-        <View style={styles.progressBar}>
-          <View 
-            style={[
-              styles.progressFill,
-              { 
-                width: `${(weeklyStats.completedExercises / weeklyStats.totalExercises) * 100 || 0}%`,
-                backgroundColor: '#7B61FF'
-              }
-            ]} 
-          />
+        
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Text style={[styles.statLabel, { color: isDarkMode ? '#ccc' : '#666' }]}>
+              Distanse
+            </Text>
+            <Text style={[styles.statValue, { color: isDarkMode ? '#fff' : '#000' }]}>
+              {weeklyStats.totalDistance.toFixed(2)} km
+            </Text>
+          </View>
+          
+          <View style={styles.statItem}>
+            <Text style={[styles.statLabel, { color: isDarkMode ? '#ccc' : '#666' }]}>
+              Tid
+            </Text>
+            <Text style={[styles.statValue, { color: isDarkMode ? '#fff' : '#000' }]}>
+              {Math.floor(weeklyStats.totalMinutes / 60)}t {weeklyStats.totalMinutes % 60}m
+            </Text>
+          </View>
+          
+          <View style={styles.statItem}>
+            <Text style={[styles.statLabel, { color: isDarkMode ? '#ccc' : '#666' }]}>
+              Økter
+            </Text>
+            <Text style={[styles.statValue, { color: isDarkMode ? '#fff' : '#000' }]}>
+              {weeklyStats.completedExercises}
+            </Text>
+          </View>
         </View>
+        
+        <LineChart
+          data={activityData}
+          width={screenWidth - 100}
+          height={180}
+          chartConfig={{
+            backgroundColor: isDarkMode ? '#2C2C2C' : '#fff',
+            backgroundGradientFrom: isDarkMode ? '#2C2C2C' : '#fff',
+            backgroundGradientTo: isDarkMode ? '#2C2C2C' : '#fff',
+            decimalPlaces: 0,
+            color: (opacity = 1) => isDarkMode ? `rgba(255, 255, 255, ${opacity})` : `rgba(0, 0, 0, ${opacity})`,
+            labelColor: (opacity = 1) => isDarkMode ? `rgba(255, 255, 255, ${opacity})` : `rgba(0, 0, 0, ${opacity})`,
+            style: {
+              borderRadius: 16,
+            },
+            propsForDots: {
+              r: '6',
+              strokeWidth: '2',
+              stroke: '#7B61FF',
+            },
+            propsForBackgroundLines: {
+              strokeDasharray: '5, 5',
+            },
+          }}
+        />
       </View>
+
+        
     </ScrollView>
   );
 }

@@ -42,19 +42,29 @@ export async function registerForPushNotificationsAsync() {
 }
 
 // Schedule workout reminder
-export async function scheduleWorkoutReminder(exerciseId: number, time: Date) {
-  const identifier = await Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'Tid for trening! 💪',
-      body: 'Din planlagte økt starter snart. Er du klar?',
-      data: { exerciseId },
-    },
-    trigger: {
-      date: time,
-    },
-  });
-  return identifier;
-}
+export const scheduleWorkoutReminder = async (exerciseId: number, date: Date) => {
+  try {
+    // Remove any existing notification for this exercise
+    await Notifications.cancelScheduledNotificationAsync(`exercise_${exerciseId}`);
+
+    // Schedule new notification
+    await Notifications.scheduleNotificationAsync({
+      identifier: `exercise_${exerciseId}`,
+      content: {
+        title: 'Workout Reminder',
+        body: 'Time for your workout!',
+      },
+      trigger: {
+        hour: date.getHours(),
+        minute: date.getMinutes(),
+        repeats: true,
+      },
+    });
+  } catch (error) {
+    console.error('Error scheduling notification:', error);
+    // Don't throw the error - just log it
+  }
+};
 
 // Send motivational notification
 export async function sendMotivationalNotification() {

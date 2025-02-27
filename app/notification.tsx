@@ -17,12 +17,10 @@ export default function NotificationsScreen() {
   useEffect(() => {
     const markNotificationsRead = async () => {
       if (!session?.user?.id) {
-        console.log('No user session found');
         return;
       }
 
       try {
-        console.log('Marking notifications as read for user:', session.user.id);
         
         // First, get unread notifications
         const { data: unreadNotifications, error: fetchError } = await supabase
@@ -36,11 +34,9 @@ export default function NotificationsScreen() {
           return;
         }
 
-        console.log('Found unread notifications:', unreadNotifications?.length || 0);
 
         if (unreadNotifications?.length > 0) {
           // Log the IDs we're about to update
-          console.log('Updating notification IDs:', unreadNotifications.map(n => n.id));
           
           // Update each notification individually
           const updatePromises = unreadNotifications.map(notification => 
@@ -65,7 +61,6 @@ export default function NotificationsScreen() {
 
           // Log successful updates
           const successfulUpdates = results.filter(result => !result.error);
-          console.log('Successfully updated notifications:', successfulUpdates.length);
 
           await refreshNotifications();
         }
@@ -95,7 +90,6 @@ export default function NotificationsScreen() {
     try {
       await supabase.from('notifications').delete().eq('user_id', session?.user?.id);
       await refreshNotifications();
-      console.log('All notifications cleared');
     } catch (error) {
       console.error('Error clearing notifications:', error);
     }

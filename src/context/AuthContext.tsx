@@ -5,6 +5,8 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { router } from 'expo-router';
 import { registerForPushNotificationsAsync, saveNotificationToken } from '@/src/utils/notifications';
+import Constants from 'expo-constants';
+import * as Notifications from 'expo-notifications';
 
 type AuthContextType = {
   session: Session | null;
@@ -17,26 +19,13 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [isCoach, setIsCoach] = useState<boolean>(false);
-
-  const checkUserRole = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .single();
-    
-    if (!error && data) {
-      setIsCoach(data.role === 'coach' || false);
-    }
-    setLoading(false);
-  };
+  const [isCoach, setIsCoach] = useState(false);
 
   useEffect(() => {
+    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session?.user) {
@@ -44,10 +33,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else {
         setLoading(false);
       }
-      setIsInitialized(true);
     });
 
-    supabase.auth.onAuthStateChange(async (_event, session) => {
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       if (session?.user) {
         await checkUserRole(session.user.id);
@@ -56,22 +45,56 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setLoading(false);
       }
     });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (session?.user) {
-      setupNotifications();
+  const checkUserRole = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
+      
+      if (error) throw error;
+      setIsCoach(data.role === 'coach');
+    } catch (error) {
+      console.error('Error checking user role:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [session]);
+  };
 
   const setupNotifications = async () => {
     try {
-      const token = await registerForPushNotificationsAsync();
+      if (!Constants.expoConfig?.extra?.eas?.projectId) {
+        console.log('Skipping notification setup - no project ID available');
+        return;
+      }
+
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== 'granted') {
+        console.log('Failed to get push token for push notification!');
+        return;
+      }
+
+      const token = await Notifications.getExpoPushTokenAsync({
+        projectId: Constants.expoConfig.extra.eas.projectId
+      });
+      
       if (token) {
         await saveNotificationToken(session!.user.id, token);
       }
     } catch (error) {
-      console.error('Error setting up notifications:', error);
+      console.log('Notification setup skipped:', error);
     }
   };
 
@@ -118,7 +141,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       {children}
     </AuthContext.Provider>
   );
-};
+}
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
