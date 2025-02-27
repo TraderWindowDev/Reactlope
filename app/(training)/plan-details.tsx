@@ -1188,6 +1188,10 @@ export default function PlanDetailsScreen() {
       textAlign: 'center',
       padding: 12,
     },
+    fakePlacement: {
+      flex: 1,
+      padding: 22,
+    },
   }); 
   if (loading) {
     return (
@@ -1533,14 +1537,31 @@ export default function PlanDetailsScreen() {
         {/* Week Header */}
         <View style={styles.weekHeader}>
           <Pressable onPress={() => handleWeekChange(-1)}>
-            <Text style={styles.weekNavText}>Forrige</Text>
+            {/* TODO: Remove forrige if week is 1 */}
+            {/* TODO: Add disabled if week is 1 */}
+            {(() => {
+              if (selectedWeek === 1) {
+                return <Text style={styles.fakePlacement}></Text>
+              }
+              else {
+                return <Text style={styles.weekNavText}>Forrige</Text>
+              }
+            })()}
           </Pressable>
           <View style={styles.weekNumberContainer}>
             <Text style={styles.weekLabel}>Uke</Text>
             <Text style={styles.weekNumber}>{selectedWeek}</Text>
           </View>
           <Pressable onPress={() => handleWeekChange(1)}>
-            <Text style={styles.weekNavText}>Neste</Text>
+            {/* TODO: Remove neste if week is last week */}
+            {(() => {
+              if (selectedWeek !== 4) {
+                return <Text style={styles.weekNavText}>Neste</Text>
+              }
+              else {
+                return <Text style={styles.fakePlacement}></Text>
+              }
+            })()}
           </Pressable>
         </View>
 

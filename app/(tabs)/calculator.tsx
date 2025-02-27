@@ -329,11 +329,15 @@ export default function CalculatorScreen() {
               selectedValue={tempDistance}
               onValueChange={(itemValue) => setTempDistance(itemValue.toString())}
               style={{ color: isDarkMode ? '#fff' : '#000' }}
+              itemStyle={{ color: isDarkMode ? '#fff' : '#000', height: 120 }}
             >
               {Array.from({ length: 101 }, (_, i) => i).map((num) => (
                 <Picker.Item key={num} label={`${num}`} value={`${num}`} />
               ))}
             </Picker>
+            <Text style={[styles.pickerCenterLabel, { color: isDarkMode ? '#fff' : '#666' }]}>
+              Kilometer
+            </Text>
           </View>
         </View>
       </Modal>
@@ -371,10 +375,11 @@ export default function CalculatorScreen() {
                   selectedValue={tempHours}
                   onValueChange={(itemValue) => setTempHours(itemValue.toString())}
                   style={[styles.picker, { color: isDarkMode ? '#fff' : '#000' }]}
+                  itemStyle={{ color: isDarkMode ? '#fff' : '#000', height: 120 }}
                 >
                   {generatePickerItems(24, false)}
                 </Picker>
-                <Text style={[styles.pickerLabel, { color: isDarkMode ? '#aaa' : '#666' }]}>
+                <Text style={[styles.pickerLabel, { color: isDarkMode ? '#fff' : '#666' }]}>
                   Timer
                 </Text>
               </View>
@@ -384,10 +389,11 @@ export default function CalculatorScreen() {
                   selectedValue={tempMinutes}
                   onValueChange={(itemValue) => setTempMinutes(itemValue.toString())}
                   style={[styles.picker, { color: isDarkMode ? '#fff' : '#000' }]}
+                  itemStyle={{ color: isDarkMode ? '#fff' : '#000', height: 120 }}
                 >
                   {generatePickerItems(59)}
                 </Picker>
-                <Text style={[styles.pickerLabel, { color: isDarkMode ? '#aaa' : '#666' }]}>
+                <Text style={[styles.pickerLabel, { color: isDarkMode ? '#fff' : '#666' }]}>
                   Minutter
                 </Text>
               </View>
@@ -397,10 +403,11 @@ export default function CalculatorScreen() {
                   selectedValue={tempSeconds}
                   onValueChange={(itemValue) => setTempSeconds(itemValue.toString())}
                   style={[styles.picker, { color: isDarkMode ? '#fff' : '#000' }]}
+                  itemStyle={{ color: isDarkMode ? '#fff' : '#000', height: 120 }}
                 >
                   {generatePickerItems(59)}
                 </Picker>
-                <Text style={[styles.pickerLabel, { color: isDarkMode ? '#aaa' : '#666' }]}>
+                <Text style={[styles.pickerLabel, { color: isDarkMode ? '#fff' : '#666' }]}>
                   Sekunder
                 </Text>
               </View>
@@ -442,10 +449,11 @@ export default function CalculatorScreen() {
                   selectedValue={tempPaceMinutes}
                   onValueChange={(itemValue) => setTempPaceMinutes(itemValue.toString())}
                   style={[styles.picker, { color: isDarkMode ? '#fff' : '#000' }]}
+                  itemStyle={{ color: isDarkMode ? '#fff' : '#000', height: 120 }}
                 >
-                  {generatePickerItems(30, false)}
+                  {generatePickerItems(59, false)}
                 </Picker>
-                <Text style={[styles.pickerLabel, { color: isDarkMode ? '#aaa' : '#666' }]}>
+                <Text style={[styles.pickerLabel, { color: isDarkMode ? '#fff' : '#666' }]}>
                   Minutter
                 </Text>
               </View>
@@ -455,10 +463,11 @@ export default function CalculatorScreen() {
                   selectedValue={tempPaceSeconds}
                   onValueChange={(itemValue) => setTempPaceSeconds(itemValue.toString())}
                   style={[styles.picker, { color: isDarkMode ? '#fff' : '#000' }]}
+                  itemStyle={{ color: isDarkMode ? '#fff' : '#000', height: 120 }}
                 >
                   {generatePickerItems(59)}
                 </Picker>
-                <Text style={[styles.pickerLabel, { color: isDarkMode ? '#aaa' : '#666' }]}>
+                <Text style={[styles.pickerLabel, { color: isDarkMode ? '#fff' : '#666' }]}>
                   Sekunder
                 </Text>
               </View>
@@ -602,6 +611,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   pickerContainer: {
+    paddingBottom: 20,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
   },
@@ -632,5 +642,11 @@ const styles = StyleSheet.create({
   },
   pickerLabel: {
     marginTop: 4,
+  },
+  pickerCenterLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginTop: 8,
   },
 }); 
