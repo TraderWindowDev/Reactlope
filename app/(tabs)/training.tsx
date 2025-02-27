@@ -514,13 +514,15 @@ export default function TrainingScreen() {
     daysContainer: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-
+      height: '15%',
     },
     dayColumn: {
+      padding: 8,
       alignItems: 'center',
-      width: '10%',
+      width: '13%',
       backgroundColor: '#1E1E1E',
       borderRadius: 5,
+      height: '100%',
     },
     dayDot: {
       width: 8,
@@ -796,7 +798,7 @@ export default function TrainingScreen() {
             </Text>
           </View>
           <View style={styles.daysContainer}>
-            {['M', 'T', 'O', 'To', 'F', 'L', 'S'].map((day, index) => {
+            {['Ma', 'Ti', 'On', 'To', 'Fr', 'Lo', 'So'].map((day, index) => {
               const dayNumber = index + 1;
               const isToday = dayNumber === (new Date().getDay() || 7);
               const hasExercise = getExercisesForDay(dayNumber).length > 0;
