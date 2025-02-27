@@ -262,7 +262,6 @@ export default function CreatePlanScreen() {
 
     setLoading(true);
     try {
-      console.log('Creating plan with coach_id:', session.user.id);
       // Create the training plan with explicit coach_id
       const { data: plan, error: planError } = await supabase
         .from('training_plans')
@@ -362,7 +361,6 @@ export default function CreatePlanScreen() {
         coach_id: session?.user.id
       };
 
-      console.log('Template data to save:', templateData); // For debugging
 
       // Validate required fields
       if (!templateData.name) {
@@ -378,7 +376,6 @@ export default function CreatePlanScreen() {
       if (error) throw error;
       
       Alert.alert('Success', 'Template saved successfully');
-      console.log('Saved template:', data); // For debugging
     } catch (error) {
       console.error('Error saving template:', error);
       Alert.alert('Error', 'Failed to save template');

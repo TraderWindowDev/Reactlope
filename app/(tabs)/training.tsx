@@ -514,10 +514,13 @@ export default function TrainingScreen() {
     daysContainer: {
       flexDirection: 'row',
       justifyContent: 'space-between',
+
     },
     dayColumn: {
       alignItems: 'center',
-      gap: 8,
+      width: '10%',
+      backgroundColor: '#1E1E1E',
+      borderRadius: 5,
     },
     dayDot: {
       width: 8,

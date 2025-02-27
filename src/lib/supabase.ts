@@ -11,9 +11,23 @@ const linking = {
   prefixes: ['reactlope://', 'https://reactlope.app'],
 };
 
+// Create a custom storage implementation using AsyncStorage
+const ExpoSecureStorage = {
+  getItem: (key: string) => {
+    return AsyncStorage.getItem(key);
+  },
+  setItem: (key: string, value: string) => {
+    AsyncStorage.setItem(key, value);
+  },
+  removeItem: (key: string) => {
+    AsyncStorage.removeItem(key);
+  },
+};
+
 // Create the Supabase client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
+    storage: ExpoSecureStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
