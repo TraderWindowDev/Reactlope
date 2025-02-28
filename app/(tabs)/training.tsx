@@ -798,7 +798,7 @@ export default function TrainingScreen() {
             </Text>
           </View>
           <View style={styles.daysContainer}>
-            {['Ma', 'Ti', 'On', 'To', 'Fr', 'Lo', 'So'].map((day, index) => {
+            {['Ma', 'Ti', 'On', 'To', 'Fr', 'Lø', 'Sø'].map((day, index) => {
               const dayNumber = index + 1;
               const isToday = dayNumber === (new Date().getDay() || 7);
               const hasExercise = getExercisesForDay(dayNumber).length > 0;

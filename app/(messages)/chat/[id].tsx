@@ -55,6 +55,12 @@ export default function ChatScreen() {
   const [fullScreenMedia, setFullScreenMedia] = useState<{ url: string, type: MediaType } | null>(null);
   const [fullScreenVisible, setFullScreenVisible] = useState(false);
 
+  // Pagination state
+  const [page, setPage] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const MESSAGES_PER_PAGE = 10;
+
   useEffect(() => {
     if (id && session?.user?.id) {
       fetchMessages();
@@ -80,41 +86,81 @@ export default function ChatScreen() {
     setRecipient(data);
   };
 
-  const fetchMessages = async () => {
-    const { data, error } = await supabase
-      .from('messages')
-      .select(`
-        *,
-        sender:profiles!sender_id(username, avatar_url),
-        recipient:profiles!recipient_id(username, avatar_url),
-        media:message_media(id, url, type)
-      `)
-      .or(
-        `and(sender_id.eq.${session.user.id},recipient_id.eq.${id}),` +
-          `and(sender_id.eq.${id},recipient_id.eq.${session.user.id})`
-      )
-      .order('created_at', { ascending: true });
-
-    if (error) {
-      console.error('Error fetching messages:', error);
-      return;
+  const fetchMessages = async (loadMore = false) => {
+    if (loadMore && !hasMoreMessages) return;
+    
+    const currentPage = loadMore ? page + 1 : 0;
+    
+    if (loadMore) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
     }
-
-    setMessages(data || []);
-    setLoading(false);
-
-    // Mark messages as read
-    if (data && data.length > 0) {
-      const { error: updateError } = await supabase
+    
+    try {
+      // Calculate the range for pagination
+      const from = currentPage * MESSAGES_PER_PAGE;
+      const to = from + MESSAGES_PER_PAGE - 1;
+      
+      console.log(`Fetching messages range: ${from}-${to}, page: ${currentPage}`);
+      
+      const { data, error } = await supabase
         .from('messages')
-        .update({ read: true })
-        .eq('sender_id', id)
-        .eq('recipient_id', session.user.id)
-        .eq('read', false);
+        .select(`
+          *,
+          sender:profiles!sender_id(username, avatar_url),
+          recipient:profiles!recipient_id(username, avatar_url),
+          media:message_media(id, url, type)
+        `)
+        .or(
+          `and(sender_id.eq.${session.user.id},recipient_id.eq.${id}),` +
+            `and(sender_id.eq.${id},recipient_id.eq.${session.user.id})`
+        )
+        .order('created_at', { ascending: false }) // Get newest messages first
+        .range(from, to);
 
-      if (updateError) {
-        console.error('Error marking messages as read:', updateError);
+      if (error) {
+        console.error('Error fetching messages:', error);
+        return;
       }
+
+      console.log(`Fetched ${data.length} messages`);
+      
+      // Check if we have more messages to load
+      setHasMoreMessages(data.length === MESSAGES_PER_PAGE);
+      
+      // Reverse the data to get chronological order (oldest to newest)
+      const chronologicalData = [...data].reverse();
+      
+      // Update page number if we're loading more
+      if (loadMore) {
+        setPage(currentPage);
+        // Prepend older messages to the beginning of the list
+        setMessages(prevMessages => [...chronologicalData, ...prevMessages]);
+      } else {
+        setPage(0);
+        // Set initial messages (newest messages in chronological order)
+        setMessages(chronologicalData);
+      }
+
+      // Mark messages as read
+      if (data && data.length > 0) {
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({ read: true })
+          .eq('sender_id', id)
+          .eq('recipient_id', session.user.id)
+          .eq('read', false);
+
+        if (updateError) {
+          console.error('Error marking messages as read:', updateError);
+        }
+      }
+    } catch (error) {
+      console.error('Error in fetchMessages:', error);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -370,10 +416,11 @@ export default function ChatScreen() {
         .single();
 
       if (!fetchError && updatedMessage) {
-        setMessages(prev => prev.map(msg => 
-          msg.id === messageData.id ? updatedMessage : msg
-        ));
+        setMessages(prev => [...prev, updatedMessage]);
       }
+
+      // Clear the input field after sending
+      setNewMessage('');
 
     } catch (error) {
       console.error('Error in send message flow:', error);
@@ -536,6 +583,24 @@ export default function ChatScreen() {
     </Modal>
   );
 
+  // Function to load more messages when scrolling up
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMoreMessages) {
+      fetchMessages(true);
+    }
+  };
+
+  // Add a loading indicator component for pagination
+  const renderFooter = () => {
+    if (!loadingMore) return null;
+    
+    return (
+      <View style={styles.loadingMoreContainer}>
+        <ActivityIndicator size="small" color={isDarkMode ? '#fff' : '#0047AB'} />
+      </View>
+    );
+  };
+
   const styles = StyleSheet.create({
     container: {
       flex: 1,
@@ -683,6 +748,11 @@ export default function ChatScreen() {
       width: Dimensions.get('window').width,
       height: Dimensions.get('window').height,
     },
+    loadingMoreContainer: {
+      padding: 16,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
   });
 
   if (loading) {
@@ -720,9 +790,26 @@ export default function ChatScreen() {
         data={messages}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-        onLayout={() => flatListRef.current?.scrollToEnd()}
+        onContentSizeChange={() => {
+          // Only scroll to end on initial load or when sending a new message
+          if (page === 0) {
+            flatListRef.current?.scrollToEnd({ animated: false });
+          }
+        }}
+        onLayout={() => {
+          // Only scroll to end on initial load
+          if (page === 0) {
+            flatListRef.current?.scrollToEnd({ animated: false });
+          }
+        }}
         style={styles.messagesList}
+        ListHeaderComponent={loadingMore ? renderFooter : null}
+        onStartReached={handleLoadMore}
+        onStartReachedThreshold={0.1}
+        maintainVisibleContentPosition={{
+          minIndexForVisible: 0,
+          autoscrollToTopThreshold: 10
+        }}
       />
 
       <View style={[styles.inputContainer, { backgroundColor: isDarkMode ? '#1E1E1E' : '#fff' }]}>

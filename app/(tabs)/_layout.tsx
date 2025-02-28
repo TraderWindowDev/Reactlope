@@ -1,63 +1,150 @@
-import React from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { router, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { TouchableOpacity, View, StyleSheet, Pressable, Text } from 'react-native';
+import { TouchableOpacity, View, StyleSheet, Pressable, Text, AppState, AppStateStatus } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
-import { DrawerActions, useNavigation } from '@react-navigation/native';
+import { DrawerActions, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useNotifications } from '@/src/context/NotificationContext';
 import { useMessages } from '@/src/context/MessagesContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Link } from 'expo-router';
+import { supabase } from '@/src/lib/supabase';
 
 export default function TabLayout() {
   const { isDarkMode } = useTheme();
   const navigation = useNavigation();
   const { unreadCount: notificationCount } = useNotifications();
-  const { chats = [] } = useMessages();
+  const { chats = [], unreadCount: contextUnreadCount } = useMessages();
   const { session, userProfile } = useAuth();
   const isCoach = userProfile?.role === 'coach';
+  const [localUnreadCount, setLocalUnreadCount] = useState(0);
+  const appStateRef = useRef(AppState.currentState);
+  const subscriptionRef = useRef(null);
 
-  // Calculate total unread messages
-  const unreadMessagesCount = chats.reduce((count, chat) => {
-    if (chat.unread) {
-      return count + 1;
+  // Calculate total unread messages from context
+  const unreadMessagesCount = localUnreadCount || contextUnreadCount;
+
+  // Function to fetch unread count directly
+  const fetchUnreadCount = async () => {
+    if (!session?.user?.id) return;
+    
+    try {
+      console.log('Fetching unread count in tab layout for user:', session.user.id);
+      
+      const { data, error } = await supabase
+        .from('messages')
+        .select('sender_id, read')
+        .eq('recipient_id', session.user.id)
+        .eq('read', false);
+        
+      if (error) {
+        console.error('Error fetching unread count in tab layout:', error);
+        return;
+      }
+      
+      console.log('Raw unread messages data:', data);
+      
+      // Count unique senders with unread messages
+      const uniqueSenders = new Set();
+      data.forEach(msg => uniqueSenders.add(msg.sender_id));
+      const count = uniqueSenders.size;
+      
+      console.log(`Tab layout unread count updated: ${count} (unique senders: ${Array.from(uniqueSenders).join(', ')})`);
+      setLocalUnreadCount(count);
+    } catch (error) {
+      console.error('Error in tab layout fetchUnreadCount:', error);
     }
-    return count;
-  }, 0);
+  };
 
-  const MessageIcon = () => (
-    <View>
-      <Ionicons 
-        name="chatbubbles-outline" 
-        size={24} 
-        color={isDarkMode ? '#fff' : '#000'} 
-      />
-      {unreadMessagesCount > 0 && (
-        <View style={[styles.badge, { backgroundColor: '#FF3B30' }]}>
-          <Text style={styles.badgeText}>
-            {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
-          </Text>
-        </View>
-      )}
-    </View>
+  // Set up subscription
+  const setupSubscription = () => {
+    if (!session?.user?.id) return;
+    
+    // Clean up existing subscription
+    if (subscriptionRef.current) {
+      subscriptionRef.current.unsubscribe();
+    }
+    
+    console.log('Setting up tab layout subscription');
+    
+    const channel = supabase.channel(`tab-layout-messages-${session.user.id}`);
+    
+    subscriptionRef.current = channel
+      .on('postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'messages',
+          filter: `recipient_id.eq.${session.user.id}`
+        }, 
+        (payload) => {
+          console.log('New message detected in tab layout:', payload);
+          fetchUnreadCount();
+        }
+      )
+      .on('postgres_changes', 
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'messages',
+          filter: `recipient_id.eq.${session.user.id}`
+        }, 
+        (payload) => {
+          console.log('Message updated in tab layout:', payload);
+          fetchUnreadCount();
+        }
+      )
+      .subscribe((status) => {
+        console.log('Tab layout subscription status:', status);
+      });
+  };
+
+  // Initial setup
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    
+    fetchUnreadCount();
+    setupSubscription();
+    
+    // Listen for app state changes
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (
+        appStateRef.current.match(/inactive|background/) && 
+        nextAppState === 'active'
+      ) {
+        console.log('App has come to the foreground, refreshing tab layout');
+        fetchUnreadCount();
+        setupSubscription();
+      }
+      
+      appStateRef.current = nextAppState;
+    });
+    
+    return () => {
+      console.log('Cleaning up tab layout resources');
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe();
+      }
+      subscription.remove();
+    };
+  }, [session?.user?.id]);
+
+  // Refresh on tab focus
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('Tab layout focused, refreshing unread count');
+      fetchUnreadCount();
+      return () => {};
+    }, [session?.user?.id])
   );
 
-  const NotificationIcon = () => (
-    <View>
-      <Ionicons 
-        name="notifications-outline" 
-        size={24} 
-        color={isDarkMode ? '#fff' : '#000'} 
-      />
-      {notificationCount > 0 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>
-            {notificationCount > 99 ? '99+' : notificationCount}
-          </Text>
-        </View>
-      )}
-    </View>
-  );
+  // Update local count when context count changes
+  useEffect(() => {
+    if (contextUnreadCount > 0) {
+      console.log(`Context unread count changed to ${contextUnreadCount}, updating local count`);
+      setLocalUnreadCount(contextUnreadCount);
+    }
+  }, [contextUnreadCount]);
 
   return (
     <Tabs
@@ -73,21 +160,39 @@ export default function TabLayout() {
         headerRight: () => (
           <View style={{ flexDirection: 'row', gap: 16, marginRight: 16 }}>
             <Link href="/messages" asChild>
-              <Pressable>
-                <Ionicons 
-                  name="chatbubble-outline" 
-                  size={24} 
-                  color={isDarkMode ? '#fff' : '#000'} 
-                />
+              <Pressable onPress={() => console.log('Messages icon pressed')}>
+                <View>
+                  <Ionicons 
+                    name="chatbubble-outline" 
+                    size={24} 
+                    color={isDarkMode ? '#fff' : '#000'} 
+                  />
+                  {unreadMessagesCount > 0 && (
+                    <View style={[styles.badge, { backgroundColor: '#FF3B30' }]}>
+                      <Text style={styles.badgeText}>
+                        {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </Pressable>
             </Link>
             <Link href="/notification" asChild>
               <Pressable>
-                <Ionicons 
-                  name="notifications-outline" 
-                  size={24} 
-                  color={isDarkMode ? '#fff' : '#000'} 
-                />
+                <View>
+                  <Ionicons 
+                    name="notifications-outline" 
+                    size={24} 
+                    color={isDarkMode ? '#fff' : '#000'} 
+                  />
+                  {notificationCount > 0 && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>
+                        {notificationCount > 99 ? '99+' : notificationCount}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </Pressable>
             </Link>
           </View>
