@@ -13,6 +13,9 @@ import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
 import { HexagonBackground } from '../components/HexagonBackground';
 import { startConnectionMonitoring } from '@/src/lib/supabase';
+import { PushNotificationProvider } from '@/src/context/PushNotificationContext';
+import { UnreadMessagesProvider } from '@/src/context/UnreadMessagesContext';
+import { Stack } from 'expo-router';
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -71,15 +74,19 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <PremiumProvider>
-          <NotificationProvider>
+        <PushNotificationProvider>
+          <UnreadMessagesProvider>
             <MessagesProvider>
-              <HexagonBackground>
-                <Slot />
-              </HexagonBackground>
+              <NotificationProvider>
+                <Stack>
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                  <Stack.Screen name="(messages)" options={{ headerShown: false }} />
+                </Stack>
+              </NotificationProvider>
             </MessagesProvider>
-          </NotificationProvider>
-        </PremiumProvider>
+          </UnreadMessagesProvider>
+        </PushNotificationProvider>
       </AuthProvider>
     </ThemeProvider>
   );

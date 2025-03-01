@@ -1,847 +1,545 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TextInput, 
-  Pressable, 
-  KeyboardAvoidingView, 
-  Platform,
-  ActivityIndicator,
-  TouchableOpacity,
-  Modal,
-  Dimensions
-} from 'react-native';
-import { useTheme } from '@/src/context/ThemeContext';
-import { useAuth } from '@/src/context/AuthContext';
-import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, FlatList, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Image, StyleSheet, SafeAreaView, StatusBar } from 'react-native';
+import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '@/src/lib/supabase';
-import { formatDistanceToNow } from 'date-fns';
-import { Image } from 'expo-image';
-import { useMessages } from '@/src/context/MessagesContext';
-import * as ImagePicker from 'expo-image-picker';
-import { decode } from 'base64-arraybuffer';
-import { Video } from 'expo-av';
-
-// Add these types
-type MediaType = 'image' | 'video';
-
-type MessageMedia = {
-  id: string;
-  url: string;
-  type: MediaType;
-  message_id: string;
-};
+import { useAuth } from '@/src/context/AuthContext';
+import { useTheme } from '@/src/context/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
+import { usePushNotification } from '@/src/context/PushNotificationContext';
 
 export default function ChatScreen() {
-  const { isDarkMode } = useTheme();
-  const { session } = useAuth();
   const { id } = useLocalSearchParams();
-  const { markChatAsRead } = useMessages();
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [recipient, setRecipient] = useState(null);
-  const flatListRef = useRef(null);
+  const { session } = useAuth();
+  const { isDarkMode } = useTheme();
+  const { sendPushNotification } = usePushNotification();
   
-  // Media state
-  const [mediaPreviewVisible, setMediaPreviewVisible] = useState(false);
-  const [selectedMedia, setSelectedMedia] = useState<{ uri: string, type: MediaType } | null>(null);
-  const [uploadingMedia, setUploadingMedia] = useState(false);
-
-  // Add these state variables
-  const [fullScreenMedia, setFullScreenMedia] = useState<{ url: string, type: MediaType } | null>(null);
-  const [fullScreenVisible, setFullScreenVisible] = useState(false);
-
-  // Pagination state
-  const [page, setPage] = useState(0);
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [messageText, setMessageText] = useState('');
+  const [chatPartner, setChatPartner] = useState(null);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  
+  const flatListRef = useRef(null);
+  const channelRef = useRef(null);
   const MESSAGES_PER_PAGE = 10;
-
-  useEffect(() => {
-    if (id && session?.user?.id) {
-      fetchMessages();
-      fetchRecipient();
-      subscribeToMessages();
-      // Mark messages as read when entering the chat
-      markChatAsRead(id);
+  
+  // Function to mark chat as read
+  const markChatAsRead = async () => {
+    try {
+      if (!session?.user?.id || !id) return;
+      
+      await supabase
+        .from('messages')
+        .update({ read: true })
+        .eq('sender_id', id)
+        .eq('recipient_id', session.user.id)
+        .eq('read', false);
+      
+      console.log('Marked messages as read');
+    } catch (error) {
+      console.error('Error marking chat as read:', error);
     }
-  }, [id, session?.user?.id]);
-
-  const fetchRecipient = async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error) {
-      console.error('Error fetching recipient:', error);
-      return;
-    }
-
-    setRecipient(data);
   };
-
-  const fetchMessages = async (loadMore = false) => {
-    if (loadMore && !hasMoreMessages) return;
-    
-    const currentPage = loadMore ? page + 1 : 0;
-    
-    if (loadMore) {
-      setLoadingMore(true);
-    } else {
-      setLoading(true);
-    }
+  
+  // Function to fetch initial messages (most recent 10)
+  const fetchMessages = async () => {
+    console.log('Fetching initial messages...');
     
     try {
-      // Calculate the range for pagination
-      const from = currentPage * MESSAGES_PER_PAGE;
-      const to = from + MESSAGES_PER_PAGE - 1;
-      
-      console.log(`Fetching messages range: ${from}-${to}, page: ${currentPage}`);
-      
       const { data, error } = await supabase
         .from('messages')
-        .select(`
-          *,
-          sender:profiles!sender_id(username, avatar_url),
-          recipient:profiles!recipient_id(username, avatar_url),
-          media:message_media(id, url, type)
-        `)
-        .or(
-          `and(sender_id.eq.${session.user.id},recipient_id.eq.${id}),` +
-            `and(sender_id.eq.${id},recipient_id.eq.${session.user.id})`
-        )
-        .order('created_at', { ascending: false }) // Get newest messages first
-        .range(from, to);
-
+        .select('*, sender:profiles!sender_id(username, avatar_url)')
+        .or(`and(sender_id.eq.${session.user.id},recipient_id.eq.${id}),` +
+             `and(sender_id.eq.${id},recipient_id.eq.${session.user.id})`)
+        .order('created_at', { ascending: false }) // Descending to get most recent first
+        .limit(MESSAGES_PER_PAGE);
+      
       if (error) {
         console.error('Error fetching messages:', error);
         return;
       }
-
+      
       console.log(`Fetched ${data.length} messages`);
       
-      // Check if we have more messages to load
+      // Reverse to display in chronological order
+      setMessages(data.reverse());
+      
+      // Check if we might have more messages
       setHasMoreMessages(data.length === MESSAGES_PER_PAGE);
       
-      // Reverse the data to get chronological order (oldest to newest)
-      const chronologicalData = [...data].reverse();
-      
-      // Update page number if we're loading more
-      if (loadMore) {
-        setPage(currentPage);
-        // Prepend older messages to the beginning of the list
-        setMessages(prevMessages => [...chronologicalData, ...prevMessages]);
-      } else {
-        setPage(0);
-        // Set initial messages (newest messages in chronological order)
-        setMessages(chronologicalData);
-      }
-
-      // Mark messages as read
-      if (data && data.length > 0) {
-        const { error: updateError } = await supabase
-          .from('messages')
-          .update({ read: true })
-          .eq('sender_id', id)
-          .eq('recipient_id', session.user.id)
-          .eq('read', false);
-
-        if (updateError) {
-          console.error('Error marking messages as read:', updateError);
+      // Scroll to bottom
+      setTimeout(() => {
+        if (flatListRef.current) {
+          flatListRef.current.scrollToEnd({ animated: false });
         }
-      }
+      }, 300);
+      
+      // Mark messages as read
+      markChatAsRead();
     } catch (error) {
-      console.error('Error in fetchMessages:', error);
+      console.error('Exception in fetchMessages:', error);
     } finally {
       setLoading(false);
-      setLoadingMore(false);
     }
   };
-
-  const subscribeToMessages = () => {
-    // Create a unique channel for this chat
-    const chatChannel = supabase.channel(`chat:${session.user.id}:${id}`);
-
-    const subscription = chatChannel
-      .on('broadcast', { event: 'new_message' }, async ({ payload }) => {
-        console.log('Broadcast received:', payload);
-        // Fetch the complete message data including sender profile
-        const { data, error } = await supabase
-          .from('messages')
-          .select(`
-            *,
-            sender:profiles!sender_id(username, avatar_url),
-            recipient:profiles!recipient_id(username, avatar_url),
-            media:message_media(id, url, type)
-          `)
-          .eq('id', payload.messageId)
-          .single();
-
-        if (!error && data) {
-          setMessages(prev => [...prev, data]);
-        }
-      })
-      .subscribe();
-
-    return () => {
-      chatChannel.unsubscribe();
-    };
-  };
-
-  // Function to pick image from gallery
-  const pickImage = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  
+  // Function to load older messages
+  const loadMoreMessages = async () => {
+    if (loadingMore || !hasMoreMessages || messages.length === 0) return;
     
-    if (permissionResult.granted === false) {
-      alert('Permission to access camera roll is required!');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: true,
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      const asset = result.assets[0];
-      const mediaType: MediaType = asset.type === 'video' ? 'video' : 'image';
-      setSelectedMedia({ uri: asset.uri, type: mediaType });
-      setMediaPreviewVisible(true);
-    }
-  };
-
-  // Function to take a photo with camera
-  const takePhoto = async () => {
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    
-    if (permissionResult.granted === false) {
-      alert('Permission to access camera is required!');
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      setSelectedMedia({ uri: result.assets[0].uri, type: 'image' });
-      setMediaPreviewVisible(true);
-    }
-  };
-
-  // Function to upload media to Supabase storage
-  const uploadMedia = async (uri: string, type: MediaType): Promise<string | null> => {
-    try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      
-      // Convert to base64 for Supabase storage
-      const reader = new FileReader();
-      return new Promise((resolve, reject) => {
-        reader.onload = async () => {
-          try {
-            const base64 = reader.result?.toString().split(',')[1];
-            if (!base64) {
-              reject('Failed to convert to base64');
-              return;
-            }
-            
-            const fileExt = uri.split('.').pop();
-            const fileName = `${Date.now()}.${fileExt}`;
-            const filePath = `media/${type}/${fileName}`;
-            
-            // Set the correct content type based on file extension
-            let contentType;
-            if (type === 'image') {
-              contentType = 'image/jpeg';
-            } else if (type === 'video') {
-              // Check file extension for video type
-              if (fileExt === 'mp4') {
-                contentType = 'video/mp4';
-              } else if (fileExt === 'mov') {
-                contentType = 'video/quicktime';
-              } else if (fileExt === 'webm') {
-                contentType = 'video/webm';
-              } else {
-                // Default video type
-                contentType = 'application/octet-stream';
-              }
-            }
-            
-            const { data, error } = await supabase.storage
-              .from('post-images') // Using your existing bucket
-              .upload(filePath, decode(base64), {
-                contentType: contentType,
-                upsert: true
-              });
-              
-            if (error) throw error;
-            
-            // Get public URL
-            const { data: { publicUrl } } = supabase.storage
-              .from('post-images')
-              .getPublicUrl(filePath);
-              
-            resolve(publicUrl);
-          } catch (error) {
-            console.error('Upload error:', error);
-            reject(error);
-          }
-        };
-        reader.onerror = () => {
-          reject('Failed to read file');
-        };
-        reader.readAsDataURL(blob);
-      });
-    } catch (error) {
-      console.error('Media upload error:', error);
-      return null;
-    }
-  };
-
-  const sendMessage = async (mediaUri?: string, mediaType?: MediaType) => {
-    if ((!newMessage.trim() && !mediaUri) || !recipient) return;
+    setLoadingMore(true);
+    console.log('Loading more messages...');
     
     try {
-      setUploadingMedia(mediaUri ? true : false);
+      // Get the oldest message we currently have
+      const oldestMessage = messages[0];
       
-      // Upload media if provided
-      let mediaUrl = null;
-      if (mediaUri && mediaType) {
-        mediaUrl = await uploadMedia(mediaUri, mediaType);
-        if (!mediaUrl) {
-          console.error('Error in send message flow:', 'Failed to upload media');
-          setUploadingMedia(false);
-          return;
-        }
-      }
-      
-      // Insert the message
-      const { data: messageData, error: messageError } = await supabase
+      const { data, error } = await supabase
         .from('messages')
-        .insert({
-          content: newMessage.trim(),
-          sender_id: session.user.id,
-          recipient_id: id,
-          read: false
-        })
-        .select()
-        .single();
-        
-      if (messageError) {
-        console.error('Error in send message flow:', messageError);
-        setUploadingMedia(false);
+        .select('*, sender:profiles!sender_id(username, avatar_url)')
+        .or(`and(sender_id.eq.${session.user.id},recipient_id.eq.${id}),` +
+             `and(sender_id.eq.${id},recipient_id.eq.${session.user.id})`)
+        .lt('created_at', oldestMessage.created_at) // Get messages older than our oldest
+        .order('created_at', { ascending: false })
+        .limit(MESSAGES_PER_PAGE);
+      
+      if (error) {
+        console.error('Error loading more messages:', error);
         return;
       }
       
-      // If media was uploaded, link it to the message
-      if (mediaUrl && messageData) {
-        const { error: mediaError } = await supabase
-          .from('message_media')
-          .insert({
-            message_id: messageData.id,
-            url: mediaUrl,
-            type: mediaType
-          });
-          
-        if (mediaError) {
-          console.error('Error linking media to message:', mediaError);
-        }
+      console.log(`Loaded ${data.length} more messages`);
+      
+      if (data.length > 0) {
+        // Add older messages to the beginning
+        setMessages(prevMessages => [...data.reverse(), ...prevMessages]);
       }
       
-      // Create a notification for the recipient
-      if (recipient.notification_token) {
-        // First, create a notification record in the database
-        const { error: notificationError } = await supabase
-          .from('notifications')
-          .insert({
-            user_id: id, // recipient's ID
-            sender_id: session.user.id,
-            type: 'message',
-            content: 'sent you a message',
-            related_id: messageData.id,
-            read: false
-          });
-          
-        if (notificationError) {
-          console.error('Error creating notification record:', notificationError);
-        }
-        
-        // Then send a push notification
-        try {
-          const response = await fetch('https://exp.host/--/api/v2/push/send', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              to: recipient.notification_token,
-              title: session.user.user_metadata.username || 'New message',
-              body: mediaUrl ? 'Sent you a media message' : newMessage.trim().substring(0, 100),
-              data: {
-                type: 'message',
-                senderId: session.user.id,
-                messageId: messageData.id
-              },
-              sound: 'default',
-              badge: 1,
-            }),
-          });
-          
-          const result = await response.json();
-          console.log('Push notification result:', result);
-        } catch (pushNotificationError) {
-          console.error('Error sending push notification:', pushNotificationError);
-        }
-      }
-
-      // Fetch the complete message with media
-      const { data: updatedMessage, error: fetchError } = await supabase
-        .from('messages')
-        .select(`
-          *,
-          sender:profiles!sender_id(username, avatar_url),
-          recipient:profiles!recipient_id(username, avatar_url),
-          media:message_media(id, url, type)
-        `)
-        .eq('id', messageData.id)
-        .single();
-
-      if (!fetchError && updatedMessage) {
-        setMessages(prev => [...prev, updatedMessage]);
-      }
-
-      // Clear the input field after sending
-      setNewMessage('');
-
+      // Check if we have more messages to load
+      setHasMoreMessages(data.length === MESSAGES_PER_PAGE);
     } catch (error) {
-      console.error('Error in send message flow:', error);
-      setUploadingMedia(false);
+      console.error('Exception in loadMoreMessages:', error);
     } finally {
-      setUploadingMedia(false);
-      setMediaPreviewVisible(false);
-      setSelectedMedia(null);
+      setLoadingMore(false);
     }
   };
-
-  const renderMessage = ({ item }) => {
-    const isOwnMessage = item.sender_id === session.user.id;
-    const hasMedia = item.media && item.media.length > 0;
-
+  
+  // Fetch chat partner info
+  const fetchChatPartner = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching chat partner:', error);
+        return;
+      }
+      
+      setChatPartner(data);
+    } catch (error) {
+      console.error('Error in fetchChatPartner:', error);
+    }
+  };
+  
+  // Send a message
+  const sendMessage = async () => {
+    if (!messageText.trim() || !session?.user?.id || !id) return;
+    
+    try {
+      const newMessage = {
+        sender_id: session.user.id,
+        recipient_id: id,
+        content: messageText.trim(),
+        read: false,
+        created_at: new Date().toISOString()
+      };
+      
+      const { data, error } = await supabase
+        .from('messages')
+        .insert(newMessage)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('Error sending message:', error);
+        return;
+      }
+      
+      setMessageText('');
+      
+      // Send push notification for the new message
+      await sendPushNotificationForMessage(data);
+      
+    } catch (error) {
+      console.error('Exception in sendMessage:', error);
+    }
+  };
+  
+  // Update the sendPushNotificationForMessage function
+  const sendPushNotificationForMessage = async (message) => {
+    try {
+      console.log("Attempting to send push notification for message:", message.id);
+      
+      // Only send notifications for messages sent by the current user
+      if (message.sender_id !== session?.user?.id) {
+        console.log("Not sending push notification for message from another user");
+        return;
+      }
+      
+      // Get recipient's push token
+      const { data: tokenData, error: tokenError } = await supabase
+        .from('user_push_tokens')
+        .select('token')
+        .eq('user_id', message.recipient_id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+        
+      if (tokenError) {
+        console.error('Error fetching recipient push token:', tokenError);
+        return;
+      }
+      
+      if (!tokenData || tokenData.length === 0) {
+        console.log('No push token found for recipient:', message.recipient_id);
+        return;
+      }
+      
+      const recipientToken = tokenData[0].token;
+      console.log('Found recipient push token:', recipientToken);
+      
+      // Get sender profile for notification
+      const { data: senderProfile, error: senderError } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', message.sender_id)
+        .single();
+        
+      if (senderError) {
+        console.error('Error fetching sender profile:', senderError);
+        return;
+      }
+      
+      // Send the push notification
+      const success = await sendPushNotification(
+        recipientToken,
+        `New message from ${senderProfile.username}`,
+        message.content,
+        {
+          type: 'message',
+          senderId: message.sender_id,
+          messageId: message.id
+        }
+      );
+      
+      console.log('Push notification sent:', success);
+      
+    } catch (error) {
+      console.error('Exception sending push notification for message:', error);
+    }
+  };
+  
+  // Set up real-time subscription
+  const setupRealtimeSubscription = () => {
+    try {
+      const channel = supabase.channel(`chat-${Date.now()}`);
+      
+      channel
+        .on('postgres_changes', 
+          { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'messages'
+          }, 
+          (payload) => {
+            console.log('New message received');
+            
+            // Check if this message is relevant to our conversation
+            const newMsg = payload.new;
+            if ((newMsg.sender_id === session.user.id && newMsg.recipient_id === id) ||
+                (newMsg.sender_id === id && newMsg.recipient_id === session.user.id)) {
+              
+              // Fetch the complete message with sender info
+              const fetchNewMessage = async () => {
+                const { data, error } = await supabase
+                  .from('messages')
+                  .select('*, sender:profiles!sender_id(username, avatar_url)')
+                  .eq('id', newMsg.id)
+                  .single();
+                
+                if (!error && data) {
+                  setMessages(prev => [...prev, data]);
+                  
+                  // Scroll to bottom
+                  setTimeout(() => {
+                    if (flatListRef.current) {
+                      flatListRef.current.scrollToEnd({ animated: true });
+                    }
+                  }, 100);
+                }
+              };
+              
+              fetchNewMessage();
+            }
+          }
+        )
+        .subscribe();
+      
+      channelRef.current = channel;
+    } catch (error) {
+      console.error('Error setting up subscription:', error);
+    }
+  };
+  
+  // Initialize
+  useEffect(() => {
+    if (session?.user?.id && id) {
+      fetchChatPartner();
+      fetchMessages();
+      setupRealtimeSubscription();
+      
+      return () => {
+        if (channelRef.current) {
+          channelRef.current.unsubscribe();
+        }
+      };
+    }
+  }, [session?.user?.id, id]);
+  
+  // Header component
+  const ChatHeader = () => {
+    const headerBgColor = isDarkMode ? '#222' : '#fff';
+    const borderColor = isDarkMode ? '#333' : '#eee';
+    
     return (
-      <View style={[
-        styles.messageContainer,
-        isOwnMessage ? styles.ownMessage : styles.otherMessage,
-        { backgroundColor: isDarkMode ? (isOwnMessage ? '#0047AB' : '#1E1E1E') : (isOwnMessage ? '#0047AB' : '#fff') }
-      ]}>
-        {!isOwnMessage && (
-          <Image
-            source={{ uri: item.sender?.avatar_url || 'https://via.placeholder.com/40' }}
-            style={styles.avatar}
-          />
-        )}
-        <View style={styles.messageContent}>
-          {item.content ? (
-            <Text style={[styles.messageText, { color: isDarkMode ? '#fff' : (isOwnMessage ? '#fff' : '#000') }]}>
-              {item.content}
+      <SafeAreaView style={{ backgroundColor: headerBgColor }}>
+        <View style={[styles.header, { backgroundColor: headerBgColor, borderBottomColor: borderColor }]}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back" size={24} color={isDarkMode ? '#fff' : '#000'} />
+          </TouchableOpacity>
+          
+          <View style={styles.headerProfile}>
+            {chatPartner?.avatar_url ? (
+              <Image 
+                source={{ uri: chatPartner.avatar_url }} 
+                style={styles.avatar} 
+              />
+            ) : (
+              <View style={[styles.avatarPlaceholder, { backgroundColor: isDarkMode ? '#333' : '#eee' }]}>
+                <Text style={{ color: isDarkMode ? '#fff' : '#000' }}>
+                  {chatPartner?.username?.charAt(0) || '?'}
+                </Text>
+              </View>
+            )}
+            
+            <Text style={[styles.username, { color: isDarkMode ? '#fff' : '#000' }]}>
+              {chatPartner?.username || 'Loading...'}
             </Text>
-          ) : null}
+          </View>
           
-          {hasMedia && item.media.map(media => (
-            <View key={media.id} style={styles.mediaContainer}>
-              {media.type === 'image' ? (
-                <Image 
-                  source={{ uri: media.url }} 
-                  style={styles.messageMedia}
-                  contentFit="cover"
-                />
-              ) : (
-                <Video
-                  source={{ uri: media.url }}
-                  style={styles.messageMedia}
-                  useNativeControls
-                  resizeMode="contain"
-                />
-              )}
-            </View>
-          ))}
-          
-          <Text style={styles.timeText}>
-            {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
+          <View style={styles.headerRight} />
+        </View>
+      </SafeAreaView>
+    );
+  };
+  
+  // Simple message bubble component
+  const MessageBubble = ({ message }) => {
+    const isOwnMessage = message.sender_id === session?.user?.id;
+    
+    return (
+      <View style={{
+        flexDirection: 'row',
+        marginVertical: 4,
+        marginHorizontal: 8,
+        alignSelf: isOwnMessage ? 'flex-end' : 'flex-start',
+      }}>
+        {!isOwnMessage && (
+          <View style={{ marginRight: 8 }}>
+            {message.sender?.avatar_url ? (
+              <Image 
+                source={{ uri: message.sender.avatar_url }} 
+                style={{ width: 32, height: 32, borderRadius: 16 }} 
+              />
+            ) : (
+              <View style={{ 
+                width: 32, 
+                height: 32, 
+                borderRadius: 16, 
+                backgroundColor: '#ccc',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}>
+                <Text>
+                  {message.sender?.username?.charAt(0) || '?'}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+        
+        <View style={{
+          backgroundColor: isOwnMessage ? '#0084ff' : (isDarkMode ? '#333' : '#e5e5ea'),
+          borderRadius: 18,
+          padding: 12,
+          maxWidth: '70%',
+        }}>
+          <Text style={{
+            color: isOwnMessage ? '#fff' : (isDarkMode ? '#fff' : '#000'),
+          }}>
+            {message.content}
           </Text>
         </View>
       </View>
     );
   };
-
-  // Media preview modal component
-  const MediaPreviewModal = () => (
-    <Modal
-      visible={mediaPreviewVisible}
-      transparent={true}
-      animationType="slide"
-      onRequestClose={() => setMediaPreviewVisible(false)}
-    >
-      <View style={styles.modalContainer}>
-        <View style={styles.mediaPreviewContainer}>
-          <View style={styles.mediaPreviewHeader}>
-            <TouchableOpacity onPress={() => setMediaPreviewVisible(false)}>
-              <Ionicons name="close" size={24} color="#fff" />
-            </TouchableOpacity>
-            <Text style={styles.mediaPreviewTitle}>Preview</Text>
-            <TouchableOpacity 
-              onPress={() => {
-                if (selectedMedia) {
-                  sendMessage(selectedMedia.uri, selectedMedia.type);
-                }
-              }}
-              disabled={uploadingMedia}
-            >
-              {uploadingMedia ? (
-                <ActivityIndicator size="small" color="#fff" />
+  
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: isDarkMode ? '#222' : '#fff' }}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <ChatHeader />
+      
+      <View style={{ flex: 1 }}>
+        {loading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#0084ff" />
+            <Text style={{ marginTop: 10, color: isDarkMode ? '#fff' : '#000' }}>
+              Loading messages...
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item) => `message-${item.id}`}
+            renderItem={({ item }) => <MessageBubble message={item} />}
+            contentContainerStyle={{ paddingVertical: 16 }}
+            ListHeaderComponent={
+              hasMoreMessages ? (
+                <TouchableOpacity
+                  onPress={loadMoreMessages}
+                  style={{
+                    padding: 10,
+                    backgroundColor: isDarkMode ? '#333' : '#f0f0f0',
+                    borderRadius: 8,
+                    marginBottom: 16,
+                    alignItems: 'center',
+                  }}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? (
+                    <ActivityIndicator size="small" color="#0084ff" />
+                  ) : (
+                    <Text style={{ color: isDarkMode ? '#fff' : '#000' }}>Load Earlier Messages</Text>
+                  )}
+                </TouchableOpacity>
               ) : (
-                <Ionicons name="send" size={24} color="#fff" />
-              )}
+                <View style={{ padding: 10, alignItems: 'center' }}>
+                  <Text style={{ color: isDarkMode ? '#999' : '#666', fontSize: 12 }}>
+                    Beginning of conversation
+                  </Text>
+                </View>
+              )
+            }
+            ListEmptyComponent={
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                <Text style={{ color: isDarkMode ? '#fff' : '#000' }}>No messages yet. Say hello!</Text>
+              </View>
+            }
+          />
+        )}
+        
+        {/* Fixed input at bottom */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'position' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        >
+          <View style={{
+            flexDirection: 'row',
+            padding: 10,
+            borderTopWidth: 1,
+            borderTopColor: isDarkMode ? '#333' : '#eee',
+            backgroundColor: isDarkMode ? '#222' : '#fff',
+          }}>
+            <TextInput
+              style={{
+                flex: 1,
+                padding: 10,
+                borderRadius: 20,
+                backgroundColor: isDarkMode ? '#444' : '#f0f0f0',
+                color: isDarkMode ? '#fff' : '#000',
+                marginRight: 10,
+              }}
+              placeholder="Type a message..."
+              placeholderTextColor={isDarkMode ? '#aaa' : '#999'}
+              value={messageText}
+              onChangeText={setMessageText}
+            />
+            <TouchableOpacity
+              style={{
+                justifyContent: 'center',
+                alignItems: 'center',
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: '#0084ff',
+              }}
+              onPress={sendMessage}
+              disabled={!messageText.trim()}
+            >
+              <Text style={{ color: '#fff', fontSize: 16 }}>→</Text>
             </TouchableOpacity>
           </View>
-          
-          {selectedMedia?.type === 'image' ? (
-            <Image 
-              source={{ uri: selectedMedia.uri }} 
-              style={styles.mediaPreview} 
-              contentFit="contain"
-            />
-          ) : selectedMedia?.type === 'video' ? (
-            <Video
-              source={{ uri: selectedMedia.uri }}
-              style={styles.mediaPreview}
-              useNativeControls
-              resizeMode="contain"
-              isLooping
-            />
-          ) : null}
-          
-          <TextInput
-            style={styles.mediaCaption}
-            placeholder="Add a caption..."
-            placeholderTextColor="#999"
-            value={newMessage}
-            onChangeText={setNewMessage}
-            multiline
-          />
-        </View>
+        </KeyboardAvoidingView>
       </View>
-    </Modal>
-  );
-
-  // Add this function to handle media taps
-  const handleMediaPress = (media) => {
-    setFullScreenMedia(media);
-    setFullScreenVisible(true);
-  };
-
-  // Add this component for full screen media viewing
-  const FullScreenMediaModal = () => (
-    <Modal
-      visible={fullScreenVisible}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={() => setFullScreenVisible(false)}
-    >
-      <View style={styles.fullScreenContainer}>
-        <TouchableOpacity 
-          style={styles.closeButton}
-          onPress={() => setFullScreenVisible(false)}
-        >
-          <Ionicons name="close" size={28} color="#fff" />
-        </TouchableOpacity>
-        
-        {fullScreenMedia?.type === 'image' ? (
-          <Image 
-            source={{ uri: fullScreenMedia.url }} 
-            style={styles.fullScreenMedia}
-            contentFit="contain"
-          />
-        ) : fullScreenMedia?.type === 'video' ? (
-          <Video
-            source={{ uri: fullScreenMedia.url }}
-            style={styles.fullScreenMedia}
-            useNativeControls
-            resizeMode="contain"
-            shouldPlay
-          />
-        ) : null}
-      </View>
-    </Modal>
-  );
-
-  // Function to load more messages when scrolling up
-  const handleLoadMore = () => {
-    if (!loadingMore && hasMoreMessages) {
-      fetchMessages(true);
-    }
-  };
-
-  // Add a loading indicator component for pagination
-  const renderFooter = () => {
-    if (!loadingMore) return null;
-    
-    return (
-      <View style={styles.loadingMoreContainer}>
-        <ActivityIndicator size="small" color={isDarkMode ? '#fff' : '#0047AB'} />
-      </View>
-    );
-  };
-
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-    },
-    loadingContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      padding: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: isDarkMode ? '#2C2C2C' : '#f0f0f0',
-      paddingTop: Platform.OS === 'ios' ? 60 : 20,
-    },
-    backButton: {
-      marginRight: 16,
-    },
-    headerAvatar: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      marginRight: 12,
-    },
-    headerTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-    },
-    messagesList: {
-      flex: 1,
-      padding: 16,
-    },
-    messageContainer: {
-      flexDirection: 'row',
-      marginBottom: 16,
-      maxWidth: '80%',
-      borderRadius: 16,
-      padding: 12,
-    },
-    ownMessage: {
-      alignSelf: 'flex-end',
-    },
-    otherMessage: {
-      alignSelf: 'flex-start',
-    },
-    avatar: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      marginRight: 8,
-    },
-    messageContent: {
-      flex: 1,
-    },
-    messageText: {
-      fontSize: 16,
-    },
-    timeText: {
-      fontSize: 12,
-      color: '#999',
-      marginTop: 4,
-    },
-    inputContainer: {
-      flexDirection: 'row',
-      padding: 16,
-      alignItems: 'center',
-      borderTopWidth: 1,
-      borderTopColor: isDarkMode ? '#2C2C2C' : '#f0f0f0',
-    },
-    input: {
-      flex: 1,
-      borderRadius: 20,
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      marginRight: 8,
-      maxHeight: 100,
-    },
-    sendButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: '#0047AB',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    mediaButton: {
-      marginHorizontal: 8,
-    },
-    mediaContainer: {
-      marginVertical: 8,
-      borderRadius: 12,
-      overflow: 'hidden',
-    },
-    messageMedia: {
-      width: 200,
-      height: 200,
-      borderRadius: 12,
-    },
-    modalContainer: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.8)',
-      justifyContent: 'center',
-    },
-    mediaPreviewContainer: {
-      backgroundColor: '#000',
-      borderRadius: 10,
-      margin: 20,
-      overflow: 'hidden',
-    },
-    mediaPreviewHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: 15,
-      backgroundColor: '#333',
-    },
-    mediaPreviewTitle: {
-      color: '#fff',
-      fontSize: 16,
-      fontWeight: 'bold',
-    },
-    mediaPreview: {
-      width: '100%',
-      height: 300,
-      backgroundColor: '#000',
-    },
-    mediaCaption: {
-      padding: 15,
-      color: '#fff',
-      backgroundColor: '#222',
-    },
-    fullScreenContainer: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.8)',
-      justifyContent: 'center',
-    },
-    closeButton: {
-      position: 'absolute',
-      top: 20,
-      right: 20,
-    },
-    fullScreenMedia: {
-      width: Dimensions.get('window').width,
-      height: Dimensions.get('window').height,
-    },
-    loadingMoreContainer: {
-      padding: 16,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-  });
-
-  if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: isDarkMode ? '#121212' : '#f5f5f5' }]}>
-        <ActivityIndicator size="large" color={isDarkMode ? '#fff' : '#0047AB'} />
-      </View>
-    );
-  }
-
-  return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={[styles.container, { backgroundColor: isDarkMode ? '#121212' : '#f5f5f5' }]}
-    >
-      <View style={[styles.header, { backgroundColor: isDarkMode ? '#1E1E1E' : '#fff' }]}>
-        <Ionicons 
-          name="arrow-back" 
-          size={24} 
-          color={isDarkMode ? '#fff' : '#000'} 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        />
-        <Image 
-          source={{ uri: recipient?.avatar_url || 'https://via.placeholder.com/40' }}
-          style={styles.headerAvatar}
-        />
-        <Text style={[styles.headerTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
-          {recipient?.username || 'Chat'}
-        </Text>
-      </View>
-
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        renderItem={renderMessage}
-        keyExtractor={(item) => item.id}
-        onContentSizeChange={() => {
-          // Only scroll to end on initial load or when sending a new message
-          if (page === 0) {
-            flatListRef.current?.scrollToEnd({ animated: false });
-          }
-        }}
-        onLayout={() => {
-          // Only scroll to end on initial load
-          if (page === 0) {
-            flatListRef.current?.scrollToEnd({ animated: false });
-          }
-        }}
-        style={styles.messagesList}
-        ListHeaderComponent={loadingMore ? renderFooter : null}
-        onStartReached={handleLoadMore}
-        onStartReachedThreshold={0.1}
-        maintainVisibleContentPosition={{
-          minIndexForVisible: 0,
-          autoscrollToTopThreshold: 10
-        }}
-      />
-
-      <View style={[styles.inputContainer, { backgroundColor: isDarkMode ? '#1E1E1E' : '#fff' }]}>
-        <TouchableOpacity onPress={pickImage} style={styles.mediaButton}>
-          <Ionicons name="image" size={24} color={isDarkMode ? '#fff' : '#666'} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={takePhoto} style={styles.mediaButton}>
-          <Ionicons name="camera" size={24} color={isDarkMode ? '#fff' : '#666'} />
-        </TouchableOpacity>
-        <TextInput
-          style={[styles.input, { 
-            backgroundColor: isDarkMode ? '#121212' : '#f5f5f5',
-            color: isDarkMode ? '#fff' : '#000'
-          }]}
-          value={newMessage}
-          onChangeText={setNewMessage}
-          placeholder="Type a message..."
-          placeholderTextColor={isDarkMode ? '#666' : '#999'}
-          multiline
-        />
-        <Pressable 
-          style={[styles.sendButton, { opacity: newMessage.trim() ? 1 : 0.5 }]}
-          onPress={() => sendMessage()}
-          disabled={!newMessage.trim()}
-        >
-          <Ionicons name="send" size={24} color="#fff" />
-        </Pressable>
-      </View>
-      
-      <MediaPreviewModal />
-      <FullScreenMediaModal />
-    </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    height: 60,
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerProfile: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 8,
+  },
+  avatarPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  username: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  headerRight: {
+    width: 40,
+  },
+});
 

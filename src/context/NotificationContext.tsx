@@ -1,18 +1,21 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { supabase } from '../lib/supabase';
+import { useRouter } from 'expo-router';
 
+// Define the notification type
 type Notification = {
   id: string;
   user_id: string;
-  type: 'like' | 'comment' | 'follow' | 'message' | 'training';
-  content: string;
-  created_at: string;
+  title: string;
+  body: string;
+  type: string;
   read: boolean;
-  related_id?: string;
+  created_at: string;
+  sender_id?: string;
   sender?: {
-    username: string;
-    avatar_url: string;
+    username?: string;
+    avatar_url?: string;
   };
 };
 
@@ -33,6 +36,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  const router = useRouter(); 
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -43,6 +47,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [session?.user?.id]);
 
   const subscribeToNotifications = () => {
+    if (!session?.user?.id) return () => {};
+    
     const channel = supabase.channel(`notifications_${session.user.id}`);
     
     const subscription = channel
@@ -119,7 +125,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  const sendPushNotification = async (token, title, body, data) => {
+  const sendPushNotification = async (token: string, title: string, body: string, data: any = {}) => {
     try {
       const response = await fetch('https://exp.host/--/api/v2/push/send', {
         method: 'POST',

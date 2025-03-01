@@ -4,7 +4,7 @@ import React, { createContext, useState, useContext, useEffect, useRef } from 'r
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { router } from 'expo-router';
-import { registerForPushNotificationsAsync, saveNotificationToken } from '@/src/utils/notifications';
+import { registerForPushNotificationsAsync, saveNotificationToken, savePushToken } from '@/src/utils/notifications';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -109,6 +109,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initializeAuth();
   }, []);
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      // Register for push notifications when user logs in
+      const registerPushNotifications = async () => {
+        const token = await registerForPushNotificationsAsync();
+        if (token) {
+          await savePushToken(session.user.id, token);
+        }
+      };
+      
+      registerPushNotifications();
+    }
+  }, [session?.user?.id]);
 
   const fetchUserProfile = async (userId) => {
     try {

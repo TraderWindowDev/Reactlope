@@ -3,11 +3,11 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { AppState, AppStateStatus } from 'react-native';
 
-// Define proper types for better type safety
+// Define types
 type Chat = {
   id: string;
   username: string;
-  avatar_url: string;
+  avatar_url?: string;
   last_message: string;
   last_message_at: string;
   unread: boolean;
@@ -16,74 +16,40 @@ type Chat = {
 type MessagesContextType = {
   chats: Chat[];
   loading: boolean;
-  refreshChats: () => Promise<void>;
-  markChatAsRead: (chatPartnerId: string) => Promise<void>;
-  isCoach: boolean;
-  canMessageUser: (userId: string) => Promise<boolean>;
   unreadCount: number;
-  setActiveChat: (chatId: string | null) => void;
-  activeChatId: string | null;
+  isCoach: boolean;
+  refreshChats: () => Promise<void>;
 };
 
-const MessagesContext = createContext<MessagesContextType>({
-  chats: [],
-  loading: true,
-  refreshChats: async () => {},
-  markChatAsRead: async () => {},
-  isCoach: false,
-  canMessageUser: async () => false,
-  unreadCount: 0,
-  setActiveChat: () => {},
-  activeChatId: null
-});
+// Create context
+const MessagesContext = createContext<MessagesContextType | undefined>(undefined);
 
-export const useMessages = () => useContext(MessagesContext);
+// Export the hook first to ensure it's available
+export const useMessages = () => {
+  const context = useContext(MessagesContext);
+  if (context === undefined) {
+    throw new Error('useMessages must be used within a MessagesProvider');
+  }
+  return context;
+};
 
 export function MessagesProvider({ children }: { children: React.ReactNode }) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isCoach, setIsCoach] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const { session } = useAuth();
-  const subscriptionsRef = useRef<any[]>([]);
+  const { session, userProfile } = useAuth();
+  const isCoach = userProfile?.role === 'coach';
   const appStateRef = useRef(AppState.currentState);
+  const subscriptionRef = useRef<any>(null);
 
-  // Function to set active chat
-  const setActiveChat = (chatId: string | null) => {
-    console.log(`Setting active chat: ${chatId}`);
-    setActiveChatId(chatId);
-  };
-
-  // Check if user is a coach
-  const checkCoachStatus = async () => {
-    if (!session?.user?.id) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', session.user.id)
-        .single();
-
-      if (error) {
-        console.error('Error checking coach status:', error);
-        return;
-      }
-
-      setIsCoach(data?.role === 'coach');
-    } catch (error) {
-      console.error('Error in checkCoachStatus:', error);
-    }
-  };
-
-  // Fetch all chats for the current user
+  // Function to fetch chats
   const fetchChats = async () => {
     if (!session?.user?.id) return;
     
-    setLoading(true);
-    
     try {
+      console.log('Fetching chats in MessagesContext...');
+      setLoading(true);
+      
       const { data: messages, error } = await supabase
         .from('messages')
         .select(`
@@ -100,12 +66,14 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching chats:', error);
+        console.error('Error fetching messages:', error);
+        setLoading(false);
         return;
       }
 
       // Process messages into chats
       const chatsByUser = {};
+      let unreadMessages = 0;
       
       messages.forEach(message => {
         const chatPartnerId = message.sender_id === session.user.id 
@@ -127,13 +95,21 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
             unread: message.recipient_id === session.user.id && !message.read
           };
         }
+        
+        // Count unread messages
+        if (message.recipient_id === session.user.id && !message.read) {
+          unreadMessages++;
+        }
       });
 
       const sortedChats = Object.values(chatsByUser)
         .sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
 
+      console.log('Updated chats in MessagesContext:', sortedChats.length);
+      console.log('Unread messages count:', unreadMessages);
+      
       setChats(sortedChats);
-      updateUnreadCount();
+      setUnreadCount(unreadMessages);
     } catch (error) {
       console.error('Error in fetchChats:', error);
     } finally {
@@ -141,26 +117,87 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Set up real-time subscriptions
-  const setupSubscriptions = () => {
-    if (!session?.user?.id) return;
+  // Handle new message
+  const handleNewMessage = async (payload) => {
+    console.log('New message received in MessagesContext:', payload);
     
-    // Clean up existing subscriptions
-    if (subscriptionsRef.current.length > 0) {
-      subscriptionsRef.current.forEach(sub => {
-        if (sub && typeof sub.unsubscribe === 'function') {
-          sub.unsubscribe();
-        }
-      });
-      subscriptionsRef.current = [];
+    if (!payload.new) return;
+    
+    const message = payload.new;
+    const chatPartnerId = message.sender_id === session?.user?.id 
+      ? message.recipient_id 
+      : message.sender_id;
+    
+    // Fetch the chat partner's profile
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('username, avatar_url')
+      .eq('id', chatPartnerId)
+      .single();
+      
+    if (profileError) {
+      console.error('Error fetching profile for new message:', profileError);
+      // Refresh all chats as fallback
+      fetchChats();
+      return;
     }
     
-    console.log('Setting up message subscriptions');
+    // Update chats state
+    setChats(prevChats => {
+      // Find if chat already exists
+      const existingChatIndex = prevChats.findIndex(chat => chat.id === chatPartnerId);
+      
+      // Create new chat object
+      const newChat = {
+        id: chatPartnerId,
+        username: profileData.username,
+        avatar_url: profileData.avatar_url,
+        last_message: message.content,
+        last_message_at: message.created_at,
+        unread: message.recipient_id === session?.user?.id && !message.read
+      };
+      
+      // If chat exists, update it
+      if (existingChatIndex !== -1) {
+        // Only update if this message is newer
+        if (new Date(message.created_at) > new Date(prevChats[existingChatIndex].last_message_at)) {
+          const updatedChats = [...prevChats];
+          updatedChats[existingChatIndex] = newChat;
+          
+          // Sort chats by last message date
+          return updatedChats.sort((a, b) => 
+            new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
+          );
+        }
+        return prevChats;
+      } 
+      
+      // If chat doesn't exist, add it
+      return [newChat, ...prevChats].sort((a, b) => 
+        new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
+      );
+    });
     
-    // Create a channel for new messages
-    const newMessageChannel = supabase.channel('messages-new');
+    // Update unread count if needed
+    if (message.recipient_id === session?.user?.id && !message.read) {
+      setUnreadCount(prev => prev + 1);
+    }
+  };
+
+  // Set up subscription
+  const setupSubscription = () => {
+    if (!session?.user?.id) return;
     
-    newMessageChannel
+    // Clean up existing subscription
+    if (subscriptionRef.current) {
+      subscriptionRef.current.unsubscribe();
+    }
+    
+    console.log('Setting up messages subscription in context');
+    
+    const channel = supabase.channel('messages-changes');
+    
+    channel
       .on('postgres_changes', 
         { 
           event: 'INSERT', 
@@ -169,157 +206,57 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
           filter: `or(sender_id.eq.${session.user.id},recipient_id.eq.${session.user.id})`
         }, 
         (payload) => {
-          console.log('New message detected:', payload);
-          
-          // Only refresh if we're not in an active chat or if this message is not for the active chat
-          const newMsg = payload.new;
-          const isForActiveChat = activeChatId && 
-            ((newMsg.sender_id === session.user.id && newMsg.recipient_id === activeChatId) ||
-             (newMsg.sender_id === activeChatId && newMsg.recipient_id === session.user.id));
-             
-          if (!isForActiveChat) {
-            fetchChats();
-          }
+          console.log('Message inserted, handling in real-time');
+          handleNewMessage(payload);
         }
       )
-      .subscribe((status) => {
-        console.log(`New messages subscription status: ${status}`);
-      });
-      
-    // Create a channel for message updates (read status)
-    const updateMessageChannel = supabase.channel('messages-update');
-    
-    updateMessageChannel
       .on('postgres_changes', 
         { 
-          event: '*', 
+          event: 'UPDATE', 
           schema: 'public', 
           table: 'messages',
           filter: `or(sender_id.eq.${session.user.id},recipient_id.eq.${session.user.id})`
         }, 
-        (payload) => {
-          console.log('Message change detected in update subscription:', payload);
+        () => {
+          console.log('Message updated, refreshing chats');
           fetchChats();
         }
       )
       .subscribe((status) => {
-        console.log('Messages update subscription status:', status);
-      });
-
-    subscriptionsRef.current.push(newMessageChannel);
-    subscriptionsRef.current.push(updateMessageChannel);
-  };
-
-  // Add a dedicated function to update unread count
-  const updateUnreadCount = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('id')
-        .eq('recipient_id', session.user.id)
-        .eq('read', false);
-        
-      if (!error && data) {
-        setUnreadCount(data.length);
-      }
-    } catch (error) {
-      console.error('Error updating unread count:', error);
-    }
-  };
-
-  const canMessageUser = async (userId) => {
-    if (!isCoach) {
-      const { data: existingChat } = await supabase
-        .from('messages')
-        .select('id')
-        .or(`and(sender_id.eq.${userId},recipient_id.eq.${session.user.id}),and(sender_id.eq.${session.user.id},recipient_id.eq.${userId})`)
-        .limit(1);
-
-      return existingChat && existingChat.length > 0;
-    }
-
-    const { data: recipient } = await supabase
-      .from('profiles')
-      .select('subscribed')
-      .eq('id', userId)
-      .single();
-
-    return recipient?.subscribed;
-  };
-
-  const markChatAsRead = async (chatPartnerId) => {
-    try {
-      const { error } = await supabase
-        .from('messages')
-        .update({ read: true })
-        .eq('sender_id', chatPartnerId)
-        .eq('recipient_id', session.user.id)
-        .eq('read', false);
-
-      if (error) {
-        console.error('Error marking messages as read:', error);
-        return;
-      }
-
-      // Immediately update local state
-      setChats(prevChats => 
-        prevChats.map(chat => 
-          chat.id === chatPartnerId 
-            ? { ...chat, unread: false }
-            : chat
-        )
-      );
-
-      // Broadcast the change to the channel
-      const channel = supabase.channel(`user_messages:${session.user.id}`);
-      channel.send({
-        type: 'broadcast',
-        event: 'messages_read',
-        payload: { chatPartnerId }
-      });
-
-    } catch (error) {
-      console.error('Error in markChatAsRead:', error);
-    }
-  };
-
-  useEffect(() => {
-    if (session?.user?.id) {
-      checkCoachStatus();
-      fetchChats();
-      setupSubscriptions();
-      
-      return () => {
-        // Clean up all subscriptions
-        if (subscriptionsRef.current && subscriptionsRef.current.length > 0) {
-          subscriptionsRef.current.forEach(sub => {
-            if (sub && typeof sub.unsubscribe === 'function') {
-              sub.unsubscribe();
-            }
-          });
+        console.log('Messages subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('Successfully subscribed to messages changes');
         }
-      };
-    }
-  }, [session?.user?.id]);
+      });
+      
+    subscriptionRef.current = channel;
+  };
 
   // Handle app state changes
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      if (
-        appStateRef.current.match(/inactive|background/) && 
-        nextAppState === 'active' &&
-        session?.user?.id
-      ) {
-        console.log('App has come to the foreground, refreshing data');
-        setupSubscriptions();
-        fetchChats();
-        updateUnreadCount();
-      }
-      
-      appStateRef.current = nextAppState;
-    });
+  const handleAppStateChange = (nextAppState: AppStateStatus) => {
+    if (appStateRef.current.match(/inactive|background/) && nextAppState === 'active') {
+      console.log('App has come to the foreground, refreshing chats');
+      fetchChats();
+    }
+    appStateRef.current = nextAppState;
+  };
 
+  // Initial setup
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    
+    console.log('Setting up MessagesContext');
+    fetchChats();
+    setupSubscription();
+    
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
     return () => {
+      console.log('Cleaning up MessagesContext');
+      if (subscriptionRef.current) {
+        console.log('Unsubscribing from messages channel');
+        subscriptionRef.current.unsubscribe();
+      }
       subscription.remove();
     };
   }, [session?.user?.id]);
@@ -328,13 +265,9 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
     <MessagesContext.Provider value={{
       chats,
       loading,
-      refreshChats: fetchChats,
-      markChatAsRead,
-      isCoach,
-      canMessageUser,
       unreadCount,
-      setActiveChat,
-      activeChatId
+      isCoach,
+      refreshChats: fetchChats
     }}>
       {children}
     </MessagesContext.Provider>

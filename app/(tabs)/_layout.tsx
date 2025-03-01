@@ -9,6 +9,7 @@ import { useMessages } from '@/src/context/MessagesContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { Link } from 'expo-router';
 import { supabase } from '@/src/lib/supabase';
+import { useUnreadMessages } from '@/src/hooks/useUnreadMessages';
 
 export default function TabLayout() {
   const { isDarkMode } = useTheme();
@@ -20,6 +21,7 @@ export default function TabLayout() {
   const [localUnreadCount, setLocalUnreadCount] = useState(0);
   const appStateRef = useRef(AppState.currentState);
   const subscriptionRef = useRef(null);
+  const { unreadCount } = useUnreadMessages();
 
   // Calculate total unread messages from context
   const unreadMessagesCount = localUnreadCount || contextUnreadCount;
@@ -146,6 +148,106 @@ export default function TabLayout() {
     }
   }, [contextUnreadCount]);
 
+  // Add these console logs to debug the notification bubble
+  useEffect(() => {
+    console.log("Current unreadCount state:", unreadCount);
+    console.log("Current localUnreadCount state:", localUnreadCount);
+    console.log("Current contextUnreadCount:", contextUnreadCount);
+    
+    // Make sure the badge is visible when there are unread messages
+    if (unreadCount > 0 || localUnreadCount > 0 || contextUnreadCount > 0) {
+      console.log("Should be showing notification badge with count:", 
+        Math.max(unreadCount, localUnreadCount, contextUnreadCount));
+    }
+  }, [unreadCount, localUnreadCount, contextUnreadCount]);
+
+  // Update the NotificationBubble component to ensure it's visible
+  const NotificationBubble = ({ count }) => {
+    console.log("Rendering NotificationBubble with count:", count);
+    
+    // Force the bubble to show for testing
+    const shouldShow = count > 0;
+    
+    if (!shouldShow) {
+      console.log("NotificationBubble hidden because count is zero or undefined");
+      return null;
+    }
+    
+    return (
+      <View style={{
+        position: 'absolute',
+        right: -6,
+        top: -3,
+        backgroundColor: '#FF3B30',
+        borderRadius: 10,
+        minWidth: 20,
+        height: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+        // Add these to make sure it's visible
+        zIndex: 999,
+        elevation: 5,
+      }}>
+        <Text style={{
+          color: '#fff',
+          fontSize: 12,
+          fontWeight: 'bold',
+        }}>
+          {count > 99 ? '99+' : count}
+        </Text>
+      </View>
+    );
+  };
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    
+    // Set up real-time subscription for new messages
+    const channel = supabase.channel(`unread-messages-${Date.now()}`);
+    
+    channel
+      .on('postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'messages',
+          filter: `recipient_id=eq.${session.user.id}` 
+        }, 
+        (payload) => {
+          // Check if the new message is unread
+          if (payload.new && !payload.new.read) {
+            console.log('New unread message received:', payload.new);
+            // Force refresh the unread count
+            setLocalUnreadCount(prev => prev + 1);
+          }
+        }
+      )
+      .on('postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `recipient_id=eq.${session.user.id}`
+        },
+        (payload) => {
+          // If a message was marked as read, refresh the count
+          console.log('Message updated:', payload.new);
+          // We need to recalculate the total unread count
+          fetchUnreadCount();
+        }
+      )
+      .subscribe((status) => {
+        console.log('Tab layout subscription status:', status);
+      });
+    
+    // Cleanup function
+    return () => {
+      console.log('Cleaning up tab layout subscription');
+      channel.unsubscribe();
+    };
+  }, [session?.user?.id]);
+
   return (
     <Tabs
       screenOptions={{
@@ -167,13 +269,7 @@ export default function TabLayout() {
                     size={24} 
                     color={isDarkMode ? '#fff' : '#000'} 
                   />
-                  {unreadMessagesCount > 0 && (
-                    <View style={[styles.badge, { backgroundColor: '#FF3B30' }]}>
-                      <Text style={styles.badgeText}>
-                        {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
-                      </Text>
-                    </View>
-                  )}
+                  <NotificationBubble count={unreadCount} />
                 </View>
               </Pressable>
             </Link>
@@ -267,8 +363,57 @@ export default function TabLayout() {
           ),
         }}
       />
-
-      
+      <Tabs.Screen
+        name="(messages)"
+        options={{
+          title: 'Messages',
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => {
+            console.log("Rendering Messages tab icon with counts:", {
+              unreadCount,
+              localUnreadCount,
+              contextUnreadCount,
+              unreadMessagesCount
+            });
+            
+            return (
+              <View>
+                <Ionicons name="chatbubble" size={size} color={color} />
+                <View style={{
+                  position: 'absolute',
+                  right: -6,
+                  top: -3,
+                  backgroundColor: '#FF3B30',
+                  borderRadius: 10,
+                  minWidth: 20,
+                  height: 20,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  paddingHorizontal: 4,
+                  zIndex: 999,
+                }}>
+                  <Text style={{
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: 'bold',
+                  }}>
+                    {unreadMessagesCount || localUnreadCount || unreadCount}
+                  </Text>
+                </View>
+              </View>
+            );
+          },
+        }}
+      />
+      <Tabs.Screen
+        name="notification-test"
+        options={{
+          title: 'Push Test',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="notifications" size={size} color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
