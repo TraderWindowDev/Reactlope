@@ -1,109 +1,172 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useAuth } from './AuthContext';
+import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
+import { registerForPushNotificationsAsync } from '../utils/notifications';
+import { useRouter } from 'expo-router';
 
 type PushNotificationContextType = {
   pushToken: string | null;
   setPushToken: (token: string | null) => void;
-  sendPushNotification: (to: string, title: string, body: string, data?: any) => Promise<boolean>;
+  sendPushNotification: (to: string, title: string, body: string, data?: any) => Promise<any>;
+  expoPushToken: string | null;
 };
 
 const PushNotificationContext = createContext<PushNotificationContextType | undefined>(undefined);
 
-export const PushNotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export function PushNotificationProvider({ children }: { children: React.ReactNode }) {
+  const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
   const [pushToken, setPushToken] = useState<string | null>(null);
   const { session } = useAuth();
-  
-  // Load the token from the database when the session changes
+  const router = useRouter();
+
+  // Initialize push notifications
   useEffect(() => {
-    if (session?.user?.id) {
-      loadPushToken(session.user.id);
-    }
+    if (!session?.user?.id) return;
+
+    const initPushNotifications = async () => {
+      try {
+        // Configure notification handler
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldPlaySound: true,
+            shouldSetBadge: true,
+          }),
+        });
+
+        // Get the token from the database
+        const { data, error } = await supabase
+          .from('user_push_tokens')
+          .select('token')
+          .eq('user_id', session.user.id)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+
+        if (error) {
+          console.error('Error fetching push token:', error);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          console.log('Found existing push token in database:', data[0].token);
+          setPushToken(data[0].token);
+        } else {
+          console.log('No push token found in database, registering new token');
+          const token = await registerForPushNotificationsAsync();
+          if (token) {
+            setPushToken(token);
+            setExpoPushToken(token);
+            
+            // Save the token to the database
+            const { error: saveError } = await supabase
+              .from('user_push_tokens')
+              .insert({
+                user_id: session.user.id,
+                token: token,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              });
+              
+            if (saveError) {
+              console.error('Error saving push token:', saveError);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing push notifications:', error);
+      }
+    };
+
+    initPushNotifications();
   }, [session?.user?.id]);
-  
-  const loadPushToken = async (userId: string) => {
-    try {
-      console.log('Loading push token for user:', userId);
-      
-      const { data, error } = await supabase
-        .from('user_push_tokens')
-        .select('token')
-        .eq('user_id', userId)
-        .order('updated_at', { ascending: false })
-        .limit(1);
-        
-      if (error) {
-        console.error('Error loading push token:', error);
-        return;
-      }
-      
-      if (data && data.length > 0) {
-        console.log('Found push token in database:', data[0].token);
-        setPushToken(data[0].token);
-      } else {
-        console.log('No push token found in database for user:', userId);
-      }
-    } catch (error) {
-      console.error('Exception loading push token:', error);
-    }
-  };
-  
+
+  // Function to send push notifications
   const sendPushNotification = async (to: string, title: string, body: string, data: any = {}) => {
     try {
       console.log('Sending push notification:', { to, title, body, data });
       
+      const message = {
+        to,
+        title,
+        body,
+        data,
+      };
+      
       const response = await fetch('https://exp.host/--/api/v2/push/send', {
         method: 'POST',
         headers: {
-          'Accept': 'application/json',
-          'Accept-encoding': 'gzip, deflate',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          to,
-          title,
-          body,
-          data,
-          sound: 'default',
-          badge: 1,
-        }),
+        body: JSON.stringify(message),
       });
       
       const responseData = await response.json();
       console.log('Push notification response:', responseData);
       
-      if (responseData.data && responseData.data.status === 'error') {
-        console.log('Push notification failed:', responseData.data.message);
-        
-        if (responseData.data.details && responseData.data.details.error === 'DeviceNotRegistered') {
-          console.log('Token is invalid, removing from database');
-          
-          // Remove the invalid token
-          if (session?.user?.id) {
-            await supabase
-              .from('user_push_tokens')
-              .delete()
-              .eq('token', to);
-          }
-        }
-        
-        return false;
+      if (responseData.data && responseData.data.status === 'ok') {
+        console.log('Push notification sent successfully');
+        return responseData;
+      } else {
+        console.warn('Push notification may not have been delivered:', responseData);
+        return responseData;
       }
-      
-      console.log('Push notification sent successfully');
-      return true;
     } catch (error) {
-      console.error('Exception sending push notification:', error);
-      return false;
+      console.error('Error sending push notification:', error);
+      return { error };
     }
   };
-  
+
+  // Add this to your PushNotificationProvider component
+  useEffect(() => {
+    // Set up notification received handler
+    const notificationReceivedSubscription = Notifications.addNotificationReceivedListener(
+      notification => {
+        console.log('Notification received while app is open:', notification);
+        // You can play a sound or show an in-app notification here
+      }
+    );
+
+    // Set up notification response handler (when user taps on notification)
+    const notificationResponseSubscription = Notifications.addNotificationResponseReceivedListener(
+      response => {
+        console.log('Notification response received:', response);
+        const { notification } = response;
+        const data = notification.request.content.data;
+        
+        // Handle different notification types
+        if (data.type === 'message') {
+          // Navigate to the chat screen
+          router.push(`/chat/${data.senderId}`);
+        } else if (data.type === 'follow') {
+          // Navigate to the user's profile
+          router.push(`/profile/${data.senderId}`);
+        } else if (data.type === 'like' || data.type === 'comment') {
+          // Navigate to the post
+          router.push(`/post/${data.postId}`);
+        }
+      }
+    );
+
+    // Clean up the subscriptions
+    return () => {
+      notificationReceivedSubscription.remove();
+      notificationResponseSubscription.remove();
+    };
+  }, [router]);
+
   return (
-    <PushNotificationContext.Provider value={{ pushToken, setPushToken, sendPushNotification }}>
+    <PushNotificationContext.Provider value={{
+      pushToken,
+      setPushToken,
+      sendPushNotification,
+      expoPushToken
+    }}>
       {children}
     </PushNotificationContext.Provider>
   );
-};
+}
 
 export const usePushNotification = () => {
   const context = useContext(PushNotificationContext);

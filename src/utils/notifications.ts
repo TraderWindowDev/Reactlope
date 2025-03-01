@@ -58,76 +58,76 @@ export async function registerForPushNotificationsAsync() {
 }
 
 // Save token to database
-export async function savePushToken(userId: string, token: string) {
-  if (!userId || !token) {
-    console.error('Missing userId or token in savePushToken:', { userId, token });
-    return false;
-  }
-
+export const savePushToken = async (userId: string, token: string) => {
   try {
-    console.log('Saving push token for user:', userId, 'Token:', token);
+    console.log(`Saving push token for user ${userId}: ${token}`);
+    console.log('User ID type:', typeof userId);
+    console.log('Token type:', typeof token);
     
-    // First, check if the token already exists for this user
-    const { data: existingToken, error: checkError } = await supabase
+    // Validate the user ID is a proper UUID
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      console.error('Invalid user ID format:', userId);
+      return false;
+    }
+    
+    // First check if this exact token already exists for this user
+    const { data: existingTokens, error: queryError } = await supabase
       .from('user_push_tokens')
       .select('*')
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .eq('token', token);
       
-    if (checkError) {
-      console.error('Error checking existing token:', checkError);
+    if (queryError) {
+      console.error('Error checking for existing token:', queryError);
       return false;
     }
     
-    let result;
+    console.log('Existing tokens query result:', existingTokens);
     
-    if (existingToken && existingToken.length > 0) {
-      // Update existing token
-      console.log('Updating existing token for user:', userId);
-      result = await supabase
+    // If token already exists, just update the timestamp
+    if (existingTokens && existingTokens.length > 0) {
+      console.log('Token already exists, updating timestamp');
+      
+      const { error: updateError } = await supabase
         .from('user_push_tokens')
-        .update({ 
-          token: token,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', userId);
-    } else {
-      // Insert new token
-      console.log('Inserting new token for user:', userId);
-      result = await supabase
-        .from('user_push_tokens')
-        .insert({ 
-          user_id: userId, 
-          token: token,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', existingTokens[0].id);
+        
+      if (updateError) {
+        console.error('Error updating token timestamp:', updateError);
+        return false;
+      }
+      
+      return true;
     }
     
-    if (result.error) {
-      console.error('Error saving push token:', result.error);
-      return false;
-    }
+    // Otherwise insert a new token
+    console.log('Inserting new token record');
+    const insertData = {
+      user_id: userId,
+      token: token,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    console.log('Insert data:', insertData);
     
-    console.log('Push token saved successfully');
-    
-    // Verify the token was saved
-    const { data: verifyData, error: verifyError } = await supabase
+    const { data: insertResult, error: insertError } = await supabase
       .from('user_push_tokens')
-      .select('*')
-      .eq('user_id', userId);
+      .insert(insertData)
+      .select();
       
-    if (verifyError) {
-      console.error('Error verifying saved token:', verifyError);
+    if (insertError) {
+      console.error('Error inserting new token:', insertError);
       return false;
     }
     
-    console.log('Verified token in database:', verifyData);
+    console.log('Token inserted successfully:', insertResult);
     return true;
   } catch (error) {
     console.error('Exception in savePushToken:', error);
     return false;
   }
-}
+};
 
 // Send push notification
 export async function sendPushNotification(token: string, title: string, body: string, data: any = {}) {

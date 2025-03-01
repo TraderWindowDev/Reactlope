@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, FlatList, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Image, StyleSheet, SafeAreaView, StatusBar } from 'react-native';
+import { View, Text, FlatList, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Image, StyleSheet, SafeAreaView, StatusBar, Button } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/context/AuthContext';
@@ -19,6 +19,7 @@ export default function ChatScreen() {
   const [messageText, setMessageText] = useState('');
   const [chatPartner, setChatPartner] = useState(null);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [isSending, setIsSending] = useState(false);
   
   const flatListRef = useRef(null);
   const channelRef = useRef(null);
@@ -147,20 +148,21 @@ export default function ChatScreen() {
   
   // Send a message
   const sendMessage = async () => {
-    if (!messageText.trim() || !session?.user?.id || !id) return;
-    
+    if (!messageText.trim() || !session?.user?.id) return;
+
     try {
-      const newMessage = {
-        sender_id: session.user.id,
-        recipient_id: id,
-        content: messageText.trim(),
-        read: false,
-        created_at: new Date().toISOString()
-      };
+      setIsSending(true);
       
-      const { data, error } = await supabase
+      // Create the message in the database
+      const { data: newMessage, error } = await supabase
         .from('messages')
-        .insert(newMessage)
+        .insert({
+          content: messageText,
+          sender_id: session.user.id,
+          recipient_id: id,
+          created_at: new Date().toISOString(),
+          read: false
+        })
         .select()
         .single();
         
@@ -169,20 +171,25 @@ export default function ChatScreen() {
         return;
       }
       
+      console.log('Message sent successfully:', newMessage);
+      
+      // Clear the input
       setMessageText('');
       
       // Send push notification for the new message
-      await sendPushNotificationForMessage(data);
+      await sendPushNotificationForMessage(newMessage);
       
     } catch (error) {
-      console.error('Exception in sendMessage:', error);
+      console.error('Error in sendMessage:', error);
+    } finally {
+      setIsSending(false);
     }
   };
   
   // Update the sendPushNotificationForMessage function
   const sendPushNotificationForMessage = async (message) => {
     try {
-      console.log("Attempting to send push notification for message:", message.id);
+      console.log("Attempting to send push notification for message:", message);
       
       // Only send notifications for messages sent by the current user
       if (message.sender_id !== session?.user?.id) {
@@ -190,31 +197,34 @@ export default function ChatScreen() {
         return;
       }
       
-      // Get recipient's push token
-      const { data: tokenData, error: tokenError } = await supabase
-        .from('user_push_tokens')
-        .select('token')
-        .eq('user_id', message.recipient_id)
-        .order('created_at', { ascending: false })
-        .limit(1);
-        
-      if (tokenError) {
-        console.error('Error fetching recipient push token:', tokenError);
+      // First, check if the recipient has any tokens using our SQL function
+      const { data: tokenCheck, error: checkError } = await supabase.rpc(
+        'send_push_notification',
+        {
+          recipient_id: message.recipient_id,
+          title: 'Checking tokens',
+          body: 'This is just a check',
+          data: {}
+        }
+      );
+      
+      if (checkError) {
+        console.error('Error checking recipient tokens:', checkError);
         return;
       }
       
-      if (!tokenData || tokenData.length === 0) {
-        console.log('No push token found for recipient:', message.recipient_id);
+      console.log('Token check result:', tokenCheck);
+      
+      // If no tokens found, don't proceed
+      if (!tokenCheck.success || tokenCheck.tokens_count === 0) {
+        console.log('No valid tokens found for recipient');
         return;
       }
-      
-      const recipientToken = tokenData[0].token;
-      console.log('Found recipient push token:', recipientToken);
       
       // Get sender profile for notification
       const { data: senderProfile, error: senderError } = await supabase
         .from('profiles')
-        .select('username')
+        .select('username, avatar_url')
         .eq('id', message.sender_id)
         .single();
         
@@ -223,19 +233,41 @@ export default function ChatScreen() {
         return;
       }
       
-      // Send the push notification
-      const success = await sendPushNotification(
-        recipientToken,
-        `New message from ${senderProfile.username}`,
-        message.content,
-        {
+      // Extract the token from the result
+      const token = tokenCheck.results[0].token;
+      console.log('Using token for push notification:', token);
+      
+      // Send the actual push notification directly from the client
+      const notificationPayload = {
+        to: token,
+        title: `New message from ${senderProfile.username}`,
+        body: message.content,
+        data: {
           type: 'message',
           senderId: message.sender_id,
-          messageId: message.id
-        }
-      );
+          messageId: message.id,
+          chatId: message.recipient_id,
+          senderUsername: senderProfile.username,
+          senderAvatar: senderProfile.avatar_url
+        },
+        sound: 'default',
+        badge: 1,
+      };
       
-      console.log('Push notification sent:', success);
+      console.log('Sending push notification with payload:', notificationPayload);
+      
+      const response = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(notificationPayload),
+      });
+      
+      const responseData = await response.json();
+      console.log('Push notification response:', responseData);
+      
+      return responseData;
       
     } catch (error) {
       console.error('Exception sending push notification for message:', error);
@@ -400,6 +432,71 @@ export default function ChatScreen() {
     );
   };
   
+  // Add this function to your chat screen
+  const registerRecipientToken = async () => {
+    try {
+      if (!id) {
+        console.error("No recipient ID available");
+        return;
+      }
+      
+      console.log("Registering test token for recipient:", id);
+      
+      // Check if the recipient already has tokens
+      const { data: existingTokens, error: checkError } = await supabase
+        .from('user_push_tokens')
+        .select('token')
+        .eq('user_id', id);
+        
+      if (checkError) {
+        console.error("Error checking existing tokens:", checkError);
+        return;
+      }
+      
+      console.log("Existing tokens for recipient:", existingTokens);
+      
+      // If they don't have any tokens, create a test one
+      if (!existingTokens || existingTokens.length === 0) {
+        // Get your own token to use as a template
+        const { data: myTokens, error: myTokenError } = await supabase
+          .from('user_push_tokens')
+          .select('token')
+          .eq('user_id', session.user.id)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+          
+        if (myTokenError || !myTokens || myTokens.length === 0) {
+          console.error("Couldn't get your token as a template");
+          return;
+        }
+        
+        // Create a test token for the recipient
+        const testToken = `ExponentPushToken[test${Date.now()}]`;
+        
+        const { error: insertError } = await supabase
+          .from('user_push_tokens')
+          .insert({
+            user_id: id,
+            token: testToken,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+          
+        if (insertError) {
+          console.error("Error creating test token for recipient:", insertError);
+        } else {
+          console.log("Created test token for recipient:", testToken);
+        }
+      } else {
+        console.log("Recipient already has tokens, no need to create a test one");
+      }
+    } catch (error) {
+      console.error("Error in registerRecipientToken:", error);
+    }
+  };
+  
+  // Add this function to your chat screen
+  
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: isDarkMode ? '#222' : '#fff' }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
@@ -491,13 +588,14 @@ export default function ChatScreen() {
                 backgroundColor: '#0084ff',
               }}
               onPress={sendMessage}
-              disabled={!messageText.trim()}
+              disabled={!messageText.trim() || isSending}
             >
               <Text style={{ color: '#fff', fontSize: 16 }}>→</Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       </View>
+    
     </SafeAreaView>
   );
 }

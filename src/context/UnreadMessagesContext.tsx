@@ -12,9 +12,27 @@ type UnreadMessagesContextType = {
 
 const UnreadMessagesContext = createContext<UnreadMessagesContextType | undefined>(undefined);
 
+// Add a debounce function to prevent too many re-renders
+const useDebounce = (value, delay) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+  
+  return debouncedValue;
+};
+
 export const UnreadMessagesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const { session } = useAuth();
+  const debouncedUnreadCount = useDebounce(unreadCount, 300); // Debounce for 300ms
   
   // Load unread messages count when session changes
   useEffect(() => {
@@ -83,7 +101,7 @@ export const UnreadMessagesProvider: React.FC<{ children: React.ReactNode }> = (
   
   return (
     <UnreadMessagesContext.Provider value={{ 
-      unreadCount, 
+      unreadCount: debouncedUnreadCount, // Use the debounced value
       setUnreadCount, 
       incrementUnreadCount, 
       decrementUnreadCount, 

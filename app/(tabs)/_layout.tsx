@@ -405,15 +405,7 @@ export default function TabLayout() {
           },
         }}
       />
-      <Tabs.Screen
-        name="notification-test"
-        options={{
-          title: 'Push Test',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="notifications" size={size} color={color} />
-          ),
-        }}
-      />
+
     </Tabs>
   );
 }
