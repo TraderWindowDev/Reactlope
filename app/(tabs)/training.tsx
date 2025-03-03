@@ -643,6 +643,44 @@ export default function TrainingScreen() {
       fontSize: 16,
       color: '#666',
     },
+    userCard: {
+      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+      padding: 16,
+      borderRadius: 12,
+      marginBottom: 24,
+    },
+    userInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    avatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+    },
+    username: {
+      fontSize: 16,
+      fontWeight: '500',
+      color: isDarkMode ? '#fff' : '#000',
+    },
+    buttonGroup: {
+      gap: 8,
+      paddingTop: 8,
+    },
+    editButton: {
+      backgroundColor: '#0047AB',
+      color: '#fff',
+    },
+    createButton: {
+      backgroundColor: '#0047AB',
+      color: '#fff',
+    },
+    templateButton: {
+      backgroundColor: '#0047AB',
+      color: '#fff',
+      margin: 8,
+    },
   });
 
   if (isLoading) {

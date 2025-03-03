@@ -23,6 +23,72 @@ export default function LoginScreen() {
     }
   };
 
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      padding: 20,
+      justifyContent: 'center',
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      marginBottom: 20,
+      textAlign: 'center',
+    },
+    input: {
+      height: 48,
+      borderWidth: 1,
+      borderColor: '#ddd',
+      borderRadius: 8,
+      paddingHorizontal: 16,
+      marginBottom: 16,
+      fontSize: 16,
+      backgroundColor: '#fff',
+    },
+    button: {
+      backgroundColor: '#000',
+      padding: 15,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    buttonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: 'bold',
+    },
+    link: {
+      marginTop: 15,
+      color: '#000',
+      textAlign: 'center',
+    },
+    forgotPasswordContainer: {
+      alignItems: 'center',
+      marginTop: 15,
+      marginBottom: 20,
+    },
+    forgotPasswordText: {
+      fontSize: 14,
+      textDecorationLine: 'underline',
+    },
+    signupContainer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      marginTop: 20,
+    },
+    signupText: {
+      fontSize: 14,
+    },
+    signupLink: {
+      fontSize: 14,
+      color: '#0047AB',
+      fontWeight: 'bold',
+    },
+    loginButton: {
+      backgroundColor: isDarkMode ? '#1E1E1E' : '#1E1E1E',
+      color: isDarkMode ? '#fff' : '#000',
+    },
+  });
+
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? '#000' : '#fff' }]}>
       <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>Welcome Back!</Text>
@@ -47,6 +113,7 @@ export default function LoginScreen() {
       <Button
         title={loading ? "Logging in..." : "Log In"}
         onPress={handleLogin}
+        style={styles.loginButton}
         disabled={loading || !email || !password}
       />
 
@@ -74,64 +141,3 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  input: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    fontSize: 16,
-    backgroundColor: '#fff',
-  },
-  button: {
-    backgroundColor: '#000',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  link: {
-    marginTop: 15,
-    color: '#000',
-    textAlign: 'center',
-  },
-  forgotPasswordContainer: {
-    alignItems: 'center',
-    marginTop: 15,
-    marginBottom: 20,
-  },
-  forgotPasswordText: {
-    fontSize: 14,
-    textDecorationLine: 'underline',
-  },
-  signupContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 20,
-  },
-  signupText: {
-    fontSize: 14,
-  },
-  signupLink: {
-    fontSize: 14,
-    color: '#0047AB',
-    fontWeight: 'bold',
-  },
-});

@@ -82,6 +82,13 @@ export default function RootLayout() {
                   <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                   <Stack.Screen name="(auth)" options={{ headerShown: false }} />
                   <Stack.Screen name="(messages)" options={{ headerShown: false }} />
+                  <Stack.Screen name="(training)" options={{ headerShown: false }} />
+                  <Stack.Screen name="(training)/manage-templates" options={{ headerShown: false }} />
+                  <Stack.Screen name="(training)/plan-details" options={{ headerShown: false }} />
+                  <Stack.Screen name="(training)/edit-plan" options={{ headerShown: false }} />
+                  <Stack.Screen name="(training)/view-progress" options={{ headerShown: false }} />
+                  <Stack.Screen name="notification" options={{ headerShown: false }} />
+                  <Stack.Screen name="(settings)" options={{ headerShown: false }} />
                 </Stack>
               </NotificationProvider>
             </MessagesProvider>

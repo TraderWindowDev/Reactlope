@@ -305,24 +305,25 @@ export default function TabLayout() {
 
   
       
+      
+    <Tabs.Screen
+        name="training"
+        options={{
+          title: isCoach ? 'Treningsplaner' : 'Min Plan',
+          tabBarLabel: isCoach ? 'Treningsplaner' : 'Min Plan',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="fitness-outline" size={size} color={color} />
+          ),
+        }}
+      />
       <Tabs.Screen
         name="coachfeed"
         options={{
-          title: 'Athletes Progress',
+          title: 'Progress',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="people-outline" size={size} color={color} />
           ),
           href: isCoach ? undefined : null,
-        }}
-      />
-    <Tabs.Screen
-        name="training"
-        options={{
-          title: 'Treningsplan',
-          tabBarLabel: 'Treningsplan',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="fitness-outline" size={size} color={color} />
-          ),
         }}
       />
       <Tabs.Screen

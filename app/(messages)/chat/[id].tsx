@@ -240,7 +240,7 @@ export default function ChatScreen() {
       // Send the actual push notification directly from the client
       const notificationPayload = {
         to: token,
-        title: `New message from ${senderProfile.username}`,
+        title: `Ny melding fra ${senderProfile.username}`,
         body: message.content,
         data: {
           type: 'message',
