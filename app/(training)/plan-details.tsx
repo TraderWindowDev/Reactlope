@@ -39,7 +39,6 @@ type Exercise = {
   perceived_exertion?: number; // 1-5 rating
 };
 
-const WEEKDAYS = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
 
 export default function PlanDetailsScreen() {
   const { planId } = useLocalSearchParams();
@@ -515,7 +514,7 @@ export default function PlanDetailsScreen() {
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDarkMode ? '#121212' : '#f5f5f5',
+      backgroundColor: isDarkMode ? '#05101a' : '#f5f5f5',
     },
     header: {
       padding: 16,
@@ -563,8 +562,10 @@ export default function PlanDetailsScreen() {
     },
     weekContainer: {
       padding: 16,
-      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+      backgroundColor: isDarkMode ? '#000b15' : '#fff',
       borderRadius: 12,
+      borderWidth: 0.2,
+      borderColor: '#6A3DE8',
       margin: 16,
     },
     weekHeader: {
@@ -598,12 +599,14 @@ export default function PlanDetailsScreen() {
       marginBottom: 16,
       padding: 12,
       borderRadius: 12,
-      backgroundColor: isDarkMode ? '#2C2C2C' : '#f5f5f5',
+      borderWidth: 0.2,
+      borderColor: '#6A3DE8',
+      backgroundColor: isDarkMode ? '#05101a' : '#f5f5f5',
     },
     dayRowWithExercise: {
-      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
-      borderWidth: 1,
-      borderColor: isDarkMode ? '#333' : '#eee',
+      backgroundColor: isDarkMode ? '#05101a' : '#f5f5f5',
+      borderWidth: 0.2,
+      borderColor: '#6A3DE8',
     },
     dayInfo: {
       flexDirection: 'row',
@@ -620,7 +623,7 @@ export default function PlanDetailsScreen() {
       color: '#666',
     },
     exerciseCard: {
-      backgroundColor: isDarkMode ? '#242424' : '#fff',
+      backgroundColor: isDarkMode ? '#000b15' : '#fff',
       borderRadius: 12,
       padding: 16,
       marginBottom: 16,
@@ -719,7 +722,7 @@ export default function PlanDetailsScreen() {
       backgroundColor: '#fff',
     },
     modalContentDark: {
-      backgroundColor: '#1E1E1E',
+      backgroundColor: '#05101a',
     },
     modalHeader: {
       flexDirection: 'row',
@@ -741,7 +744,7 @@ export default function PlanDetailsScreen() {
       flexDirection: 'row',
       marginBottom: 20,
       padding: 12,
-      backgroundColor: isDarkMode ? '#1E1E1E' : '#F8F8F8',
+      backgroundColor: isDarkMode ? '#000b15' : '#F8F8F8',
       borderRadius: 12,
       borderBottomColor: isDarkMode ? '#2C2C2C' : '#fff',
       borderBottomWidth: isDarkMode ? 1 : 0,
@@ -797,7 +800,7 @@ export default function PlanDetailsScreen() {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: isDarkMode ? '#121212' : '#f5f5f5',
+      backgroundColor: isDarkMode ? '#000b15' : '#f5f5f5',
     },
     commentContainer: {
       backgroundColor: isDarkMode ? '#2C2C2C' : '#fff',
@@ -888,8 +891,10 @@ export default function PlanDetailsScreen() {
     },
     calendarContainer: {
       padding: 16,
-      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+      backgroundColor: isDarkMode ? '#000b15' : '#fff',
       borderRadius: 12,
+      borderWidth: 0.2,
+      borderColor: '#6A3DE8',
       margin: 16,
     },
     calendarHeader: {
@@ -954,14 +959,16 @@ export default function PlanDetailsScreen() {
       flexDirection: 'row',
       alignItems: 'center',
       padding: 16,
-      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+      backgroundColor: isDarkMode ? '#000b15' : '#fff',
       borderRadius: 12,
     },
     planHeader: {
       padding: 16,
-      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+      backgroundColor: isDarkMode ? '#000b15' : '#fff',
       borderRadius: 12,
       margin: 16,
+      borderWidth: 0.2,
+      borderColor: '#6A3DE8',
     },
     titleRow: {
       flexDirection: 'row',
@@ -983,10 +990,12 @@ export default function PlanDetailsScreen() {
       marginTop: 8,
     },
     descriptionCard: {
-      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+      backgroundColor: isDarkMode ? '#000b15' : '#fff',
       borderRadius: 12,
       margin: 16,
       padding: 16,
+      borderWidth: 0.2,
+      borderColor: '#6A3DE8',
     },
     descriptionTitle: {
       fontSize: 18,
@@ -1013,8 +1022,10 @@ export default function PlanDetailsScreen() {
     viewToggleCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+      backgroundColor: isDarkMode ? '#000b15' : '#fff',
       margin: 16,
+      borderWidth: 0.2,
+      borderColor: '#6A3DE8',
       padding: 16,
       borderRadius: 12,
       gap: 8,
@@ -1028,13 +1039,13 @@ export default function PlanDetailsScreen() {
     },
     todayCell: {
       backgroundColor: isDarkMode ? '#0047AB30' : '#0047AB15',
-      borderWidth: 2,
-      borderColor: '#0047AB',
+      borderWidth: 0.5,
+      borderColor: '#6A3DE8',
       borderRadius: 8,
     },
     todayRow: {
-      borderWidth: 2,
-      borderColor: '#0047AB',
+      borderWidth: 0.5,
+      borderColor: '#6A3DE8',
       backgroundColor: isDarkMode ? '#0047AB15' : '#0047AB08',
     },
     todayText: {
@@ -1096,8 +1107,10 @@ export default function PlanDetailsScreen() {
       color: '#666',
     },
     exertionCard: {
-      backgroundColor: isDarkMode ? '#242424' : '#fff',
+      backgroundColor: isDarkMode ? '#000b15' : '#fff',
       borderRadius: 12,
+      borderWidth: 0.2,
+      borderColor: '#6A3DE8',
       padding: 16,
       marginBottom: 16,
       shadowColor: '#000',

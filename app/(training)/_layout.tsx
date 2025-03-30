@@ -46,7 +46,7 @@ export default function TrainingLayout() {
 
           ),
           headerStyle: {
-             backgroundColor: isDarkMode ? '#1E1E1E' : '#fff'
+             backgroundColor: isDarkMode ? '#000b15' : '#fff'
           },
         }} 
       />
@@ -82,7 +82,7 @@ export default function TrainingLayout() {
               size={24} 
               color={isDarkMode ? '#fff' : '#000'}
               style={{ marginLeft: 16 }}
-              onPress={() => router.navigate('/(tabs)/training')}
+              onPress={() => router.back()}
             />
           ),
           headerStyle: {

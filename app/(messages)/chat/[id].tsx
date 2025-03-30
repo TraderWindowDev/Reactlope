@@ -189,14 +189,13 @@ export default function ChatScreen() {
   // Update the sendPushNotificationForMessage function
   const sendPushNotificationForMessage = async (message) => {
     try {
-      console.log("Attempting to send push notification for message:", message);
       
       // Only send notifications for messages sent by the current user
       if (message.sender_id !== session?.user?.id) {
         console.log("Not sending push notification for message from another user");
         return;
       }
-      
+    
       // First, check if the recipient has any tokens using our SQL function
       const { data: tokenCheck, error: checkError } = await supabase.rpc(
         'send_push_notification',
@@ -213,7 +212,6 @@ export default function ChatScreen() {
         return;
       }
       
-      console.log('Token check result:', tokenCheck);
       
       // If no tokens found, don't proceed
       if (!tokenCheck.success || tokenCheck.tokens_count === 0) {
@@ -235,7 +233,6 @@ export default function ChatScreen() {
       
       // Extract the token from the result
       const token = tokenCheck.results[0].token;
-      console.log('Using token for push notification:', token);
       
       // Send the actual push notification directly from the client
       const notificationPayload = {
@@ -254,7 +251,6 @@ export default function ChatScreen() {
         badge: 1,
       };
       
-      console.log('Sending push notification with payload:', notificationPayload);
       
       const response = await fetch('https://exp.host/--/api/v2/push/send', {
         method: 'POST',
@@ -265,7 +261,6 @@ export default function ChatScreen() {
       });
       
       const responseData = await response.json();
-      console.log('Push notification response:', responseData);
       
       return responseData;
       
@@ -287,7 +282,6 @@ export default function ChatScreen() {
             table: 'messages'
           }, 
           (payload) => {
-            console.log('New message received');
             
             // Check if this message is relevant to our conversation
             const newMsg = payload.new;
@@ -343,41 +337,48 @@ export default function ChatScreen() {
   
   // Header component
   const ChatHeader = () => {
-    const headerBgColor = isDarkMode ? '#222' : '#fff';
-    const borderColor = isDarkMode ? '#333' : '#eee';
+    const headerBgColor = isDarkMode ? '#000b15' : '#fff';
+    const borderColor = isDarkMode ? '#6A3DE8' : '#eee';
     
     return (
-      <SafeAreaView style={{ backgroundColor: headerBgColor }}>
-        <View style={[styles.header, { backgroundColor: headerBgColor, borderBottomColor: borderColor }]}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={24} color={isDarkMode ? '#fff' : '#000'} />
-          </TouchableOpacity>
-          
-          <View style={styles.headerProfile}>
-            {chatPartner?.avatar_url ? (
-              <Image 
-                source={{ uri: chatPartner.avatar_url }} 
-                style={styles.avatar} 
-              />
-            ) : (
-              <View style={[styles.avatarPlaceholder, { backgroundColor: isDarkMode ? '#333' : '#eee' }]}>
-                <Text style={{ color: isDarkMode ? '#fff' : '#000' }}>
-                  {chatPartner?.username?.charAt(0) || '?'}
-                </Text>
-              </View>
-            )}
+      <View style={{ 
+        backgroundColor: headerBgColor,
+        width: '100%',
+        borderBottomColor: borderColor,
+        borderBottomWidth: 0.2
+      }}>
+        <SafeAreaView style={{ backgroundColor: headerBgColor }}>
+          <View style={[styles.header, { backgroundColor: headerBgColor }]}>
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <Ionicons name="arrow-back" size={24} color={isDarkMode ? '#fff' : '#000'} />
+            </TouchableOpacity>
             
-            <Text style={[styles.username, { color: isDarkMode ? '#fff' : '#000' }]}>
-              {chatPartner?.username || 'Loading...'}
-            </Text>
+            <View style={styles.headerProfile}>
+              {chatPartner?.avatar_url ? (
+                <Image 
+                  source={{ uri: chatPartner.avatar_url }} 
+                  style={styles.avatar} 
+                />
+              ) : (
+                <View style={[styles.avatarPlaceholder, { backgroundColor: isDarkMode ? '#333' : '#eee' }]}>
+                  <Text style={{ color: isDarkMode ? '#fff' : '#000' }}>
+                    {chatPartner?.username?.charAt(0) || '?'}
+                  </Text>
+                </View>
+              )}
+              
+              <Text style={[styles.username, { color: isDarkMode ? '#fff' : '#000' }]}>
+                {chatPartner?.username || 'Loading...'}
+              </Text>
+            </View>
+            
+            <View style={styles.headerRight} />
           </View>
-          
-          <View style={styles.headerRight} />
-        </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </View>
     );
   };
   
@@ -495,14 +496,21 @@ export default function ChatScreen() {
     }
   };
   
-  // Add this function to your chat screen
-  
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: isDarkMode ? '#222' : '#fff' }}>
+    <View style={{ 
+      flex: 1, 
+      backgroundColor: isDarkMode ? '#05101a' : '#fff',
+      width: '100%'
+    }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      
       <ChatHeader />
       
-      <View style={{ flex: 1 }}>
+      <View style={{ 
+        flex: 1,
+        backgroundColor: isDarkMode ? '#05101a' : '#fff',
+        width: '100%'
+      }}>
         {loading ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator size="large" color="#0084ff" />
@@ -516,87 +524,100 @@ export default function ChatScreen() {
             data={messages}
             keyExtractor={(item) => `message-${item.id}`}
             renderItem={({ item }) => <MessageBubble message={item} />}
-            contentContainerStyle={{ paddingVertical: 16 }}
+            contentContainerStyle={{ paddingVertical: 6 }}
             ListHeaderComponent={
               hasMoreMessages ? (
                 <TouchableOpacity
                   onPress={loadMoreMessages}
                   style={{
                     padding: 10,
-                    backgroundColor: isDarkMode ? '#333' : '#f0f0f0',
+                    backgroundColor: isDarkMode ? '#000b15' : '#f0f0f0',
                     borderRadius: 8,
+                    borderWidth: 0.2,
+                    margin: 10,
+                    borderColor: isDarkMode ? '#6A3DE8' : '#f0f0f0',
                     marginBottom: 16,
                     alignItems: 'center',
                   }}
                   disabled={loadingMore}
                 >
                   {loadingMore ? (
-                    <ActivityIndicator size="small" color="#0084ff" />
+                    <ActivityIndicator size="small" color="#000b15" />
                   ) : (
-                    <Text style={{ color: isDarkMode ? '#fff' : '#000' }}>Load Earlier Messages</Text>
+                    <Text style={{ color: isDarkMode ? '#fff' : '#000' }}>Last flere meldinger</Text>
                   )}
                 </TouchableOpacity>
               ) : (
                 <View style={{ padding: 10, alignItems: 'center' }}>
                   <Text style={{ color: isDarkMode ? '#999' : '#666', fontSize: 12 }}>
-                    Beginning of conversation
+                    Samtale Start
                   </Text>
                 </View>
               )
             }
             ListEmptyComponent={
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-                <Text style={{ color: isDarkMode ? '#fff' : '#000' }}>No messages yet. Say hello!</Text>
+                <Text style={{ color: isDarkMode ? '#fff' : '#000' }}>Ingen meldinger enda. Si hei!</Text>
               </View>
             }
           />
         )}
         
         {/* Fixed input at bottom */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'position' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        >
-          <View style={{
-            flexDirection: 'row',
-            padding: 10,
-            borderTopWidth: 1,
-            borderTopColor: isDarkMode ? '#333' : '#eee',
-            backgroundColor: isDarkMode ? '#222' : '#fff',
-          }}>
-            <TextInput
-              style={{
-                flex: 1,
-                padding: 10,
-                borderRadius: 20,
-                backgroundColor: isDarkMode ? '#444' : '#f0f0f0',
-                color: isDarkMode ? '#fff' : '#000',
-                marginRight: 10,
-              }}
-              placeholder="Type a message..."
-              placeholderTextColor={isDarkMode ? '#aaa' : '#999'}
-              value={messageText}
-              onChangeText={setMessageText}
-            />
-            <TouchableOpacity
-              style={{
-                justifyContent: 'center',
-                alignItems: 'center',
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                backgroundColor: '#0084ff',
-              }}
-              onPress={sendMessage}
-              disabled={!messageText.trim() || isSending}
-            >
-              <Text style={{ color: '#fff', fontSize: 16 }}>→</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
+        <View style={{
+          width: '100%',
+          backgroundColor: isDarkMode ? '#000b15' : '#fff',
+          borderTopWidth: 0.2,
+          borderTopColor: isDarkMode ? '#6A3DE8' : '#eee',
+        }}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+          >
+            <View style={{
+              flexDirection: 'row',
+              padding: 10,
+              backgroundColor: isDarkMode ? '#000b15' : '#fff',
+              width: '100%',
+              minHeight: 60,
+            }}>
+              <TextInput
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 20,
+                  backgroundColor: isDarkMode ? '#05101a' : '#f0f0f0',
+                  color: isDarkMode ? '#fff' : '#000',
+                  borderWidth: 0.2,
+                  borderColor: isDarkMode ? '#6A3DE8' : '#f0f0f0',
+                  marginRight: 10,
+                  minHeight: 40,
+                  marginBottom: 20,
+                }}
+                placeholder="Skriv en melding..."
+                placeholderTextColor={isDarkMode ? '#aaa' : '#999'}
+                value={messageText}
+                onChangeText={setMessageText}
+              />
+              <TouchableOpacity
+                style={{
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: '#0084ff',
+                }}
+                onPress={sendMessage}
+                disabled={!messageText.trim() || isSending}
+              >
+                <Text style={{ color: '#fff', fontSize: 16 }}>→</Text>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
       </View>
-    
-    </SafeAreaView>
+    </View>
   );
 }
 

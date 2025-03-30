@@ -20,7 +20,7 @@ export function Card({ children, style, variant = 'elevated', onPress }: CardPro
     },
     
     outlined: {
-      borderWidth: 1,
+      borderWidth: 0.2,
       borderColor: isDarkMode ? '#fff' : theme.colors.surface,
     },
     pressed: {

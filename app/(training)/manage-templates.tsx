@@ -56,7 +56,6 @@ export default function ManageTemplatesScreen() {
       const { data, error } = await supabase
         .from('exercise_templates')
         .select('*')
-        .eq('coach_id', session?.user.id);
 
       if (error) throw error;
       setTemplates(data || []);
@@ -215,7 +214,7 @@ export default function ManageTemplatesScreen() {
     modalContent: {
       borderRadius: 12,
       padding: 16,
-      maxHeight: '90%',
+      maxHeight: '80%',
       borderWidth: 1,
     },
     modalHeader: {
@@ -227,6 +226,12 @@ export default function ManageTemplatesScreen() {
     modalTitle: {
       fontSize: 20,
       fontWeight: 'bold',
+    },
+    modalScrollView: {
+      width: '100%',
+    },
+    modalScrollContent: {
+      paddingBottom: 20,
     },
     formGroup: {
       marginBottom: 16,
@@ -359,96 +364,102 @@ export default function ManageTemplatesScreen() {
               </Pressable>
             </View>
 
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Type</Text>
-              <Picker
-                selectedValue={templateDetails.type}
-                onValueChange={(value) => setTemplateDetails({
-                  ...templateDetails,
-                  type: value,
-                  sets: value === 'rest' ? '0' : templateDetails.sets,
-                  reps: value === 'rest' ? '0' : templateDetails.reps,
-                })}
-                style={{ color: isDarkMode ? '#fff' : '#000', backgroundColor: isDarkMode ? '#2C2C2C' : '#fff' }}
-              >
-                <Picker.Item label="Exercise" value="exercise" />
-                <Picker.Item label="Rest" value="rest" />
-                <Picker.Item label="Cardio" value="cardio" />
-              </Picker>
-            </View>
+            <ScrollView 
+              style={styles.modalScrollView}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={true}
+            >
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Type</Text>
+                <Picker
+                  selectedValue={templateDetails.type}
+                  onValueChange={(value) => setTemplateDetails({
+                    ...templateDetails,
+                    type: value,
+                    sets: value === 'rest' ? '0' : templateDetails.sets,
+                    reps: value === 'rest' ? '0' : templateDetails.reps,
+                  })}
+                  style={{ color: isDarkMode ? '#fff' : '#000', backgroundColor: isDarkMode ? '#2C2C2C' : '#fff' }}
+                >
+                  <Picker.Item label="Exercise" value="exercise" />
+                  <Picker.Item label="Rest" value="rest" />
+                  <Picker.Item label="Cardio" value="cardio" />
+                </Picker>
+              </View>
 
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Navn</Text>
-              <TextInput
-                style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ccc' }]}
-                value={templateDetails.name}
-                onChangeText={(text) => setTemplateDetails({...templateDetails, name: text})}
-                placeholder="Malenavn"
-                placeholderTextColor={isDarkMode ? '#666' : '#999'}
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Navn</Text>
+                <TextInput
+                  style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ccc' }]}
+                  value={templateDetails.name}
+                  onChangeText={(text) => setTemplateDetails({...templateDetails, name: text})}
+                  placeholder="Malenavn"
+                  placeholderTextColor={isDarkMode ? '#666' : '#999'}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Beskrivelse</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ccc' }]}
+                  value={templateDetails.description}
+                  onChangeText={(text) => setTemplateDetails({...templateDetails, description: text})}
+                  placeholder="Malbeskrivelse"
+                  placeholderTextColor={isDarkMode ? '#666' : '#999'}
+                  multiline
+                />
+              </View>
+
+              {templateDetails.type !== 'rest' && (
+                <>
+                  {templateDetails.type === 'exercise' && (
+                    <>
+                      <View style={styles.formGroup}>
+                        <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Set</Text>
+                        <TextInput
+                          style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ccc' }]}
+                          value={templateDetails.sets}
+                          onChangeText={(text) => setTemplateDetails({...templateDetails, sets: text})}
+                          placeholder="Antall set"
+                          placeholderTextColor={isDarkMode ? '#666' : '#999'}
+                          keyboardType="numeric"
+                        />
+                      </View>
+
+                      <View style={styles.formGroup}>
+                        <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Rep</Text>
+                        <TextInput
+                          style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ccc' }]}
+                          value={templateDetails.reps}
+                          onChangeText={(text) => setTemplateDetails({...templateDetails, reps: text})}
+                          placeholder="Antall reps"
+                          placeholderTextColor={isDarkMode ? '#666' : '#999'}
+                          keyboardType="numeric"
+                        />
+                      </View>
+                    </>
+                  )}
+                </>
+              )}
+
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Varighet (minutter)</Text>
+                <TextInput
+                  style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ccc' }]}
+                  value={templateDetails.duration_minutes}
+                  onChangeText={(text) => setTemplateDetails({...templateDetails, duration_minutes: text})}
+                  placeholder="Varighet i minutter"
+                  placeholderTextColor={isDarkMode ? '#666' : '#999'}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <Button
+                title={editingTemplateId ? 'Oppdater mal' : 'Lagre mal'}
+                onPress={handleSaveTemplate}
+                style={styles.saveButton}
               />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Beskrivelse</Text>
-              <TextInput
-                style={[styles.input, styles.textArea, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ccc' }]}
-                value={templateDetails.description}
-                onChangeText={(text) => setTemplateDetails({...templateDetails, description: text})}
-                placeholder="Malbeskrivelse"
-                placeholderTextColor={isDarkMode ? '#666' : '#999'}
-                multiline
-              />
-            </View>
-
-            {templateDetails.type !== 'rest' && (
-              <>
-                {templateDetails.type === 'exercise' && (
-                  <>
-                    <View style={styles.formGroup}>
-                      <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Set</Text>
-                      <TextInput
-                        style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ccc' }]}
-                        value={templateDetails.sets}
-                        onChangeText={(text) => setTemplateDetails({...templateDetails, sets: text})}
-                        placeholder="Antall set"
-                        placeholderTextColor={isDarkMode ? '#666' : '#999'}
-                        keyboardType="numeric"
-                      />
-                    </View>
-
-                    <View style={styles.formGroup}>
-                      <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Rep</Text>
-                      <TextInput
-                        style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ccc' }]}
-                        value={templateDetails.reps}
-                        onChangeText={(text) => setTemplateDetails({...templateDetails, reps: text})}
-                        placeholder="Antall reps"
-                        placeholderTextColor={isDarkMode ? '#666' : '#999'}
-                        keyboardType="numeric"
-                      />
-                    </View>
-                  </>
-                )}
-              </>
-            )}
-
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Varighet (minutter)</Text>
-              <TextInput
-                style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ccc' }]}
-                value={templateDetails.duration_minutes}
-                onChangeText={(text) => setTemplateDetails({...templateDetails, duration_minutes: text})}
-                placeholder="Varighet i minutter"
-                placeholderTextColor={isDarkMode ? '#666' : '#999'}
-                keyboardType="numeric"
-              />
-            </View>
-
-            <Button
-              title={editingTemplateId ? 'Oppdater mal' : 'Lagre mal'}
-              onPress={handleSaveTemplate}
-              style={styles.saveButton}
-            />
+            </ScrollView>
           </View>
         </View>
       </Modal>

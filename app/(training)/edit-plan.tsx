@@ -148,6 +148,21 @@ export default function EditPlanScreen() {
     setModalVisible(true);
   };
 
+  const mapUITypeToDBType = (uiType: string): string => {
+    switch(uiType) {
+      case 'rolig':
+        return 'exercise';
+      case 'intervall':
+        return 'exercise';
+      case 'hvile':
+        return 'rest';
+      case 'alternativ':
+        return 'cardio';
+      default:
+        return 'exercise';
+    }
+  };
+
   const handleSaveExercise = async () => {
     try {
       if (!exerciseDetails.name) {
@@ -173,16 +188,19 @@ export default function EditPlanScreen() {
         speed = (distanceKm / durationHours).toFixed(2); // Round to 2 decimal places
       }
 
+      // Map the UI type to database type
+      const dbType = mapUITypeToDBType(exerciseDetails.type);
+      
       const exerciseData = {
         name: exerciseDetails.name,
-        sets: exerciseDetails.type === 'exercise' ? parseInt(exerciseDetails.sets) : 0,
-        reps: exerciseDetails.type === 'exercise' ? parseInt(exerciseDetails.reps) : 0,
+        sets: exerciseDetails.sets ? parseInt(exerciseDetails.sets) : null,
+        reps: exerciseDetails.reps ? parseInt(exerciseDetails.reps) : null,
         duration_minutes: parseInt(exerciseDetails.duration_minutes) || 0,
-        distance: parseFloat(exerciseDetails.distance) || 0,
+        distance: exerciseDetails.distance ? parseFloat(exerciseDetails.distance) : null,
         speed: speed ? parseFloat(speed) : null, // Store calculated speed
         description: exerciseDetails.description,
-        type: exerciseDetails.type,
-        plan_id: planId,
+        type: dbType, // Use the mapped type here
+        plan_id: parseInt(planId as string),
         week_number: selectedWeek,
         day_number: selectedDay,
         start_time: new Date().toISOString() // Format: "2024-01-23T09:00:00.000Z"
@@ -309,28 +327,36 @@ export default function EditPlanScreen() {
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       justifyContent: 'center',
       alignItems: 'center',
-      padding: 20,
+      padding: 16,
     },
     modalContent: {
       backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
       borderRadius: 12,
-      padding: 20,
       width: '100%',
-      maxWidth: 500,
+      maxHeight: '80%',
+      padding: 16,
     },
     modalHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 20,
+      marginBottom: 16,
     },
     modalTitle: {
       fontSize: 18,
       fontWeight: '600',
+      color: isDarkMode ? '#fff' : '#000',
     },
     closeButton: {
       fontSize: 24,
       fontWeight: '400',
+      color: isDarkMode ? '#fff' : '#000',
+    },
+    modalScrollView: {
+      width: '100%',
+    },
+    modalScrollContent: {
+      paddingBottom: 20,
     },
     formGroup: {
       marginBottom: 16,
@@ -339,25 +365,31 @@ export default function EditPlanScreen() {
       fontSize: 16,
       fontWeight: '500',
       marginBottom: 8,
+      color: isDarkMode ? '#fff' : '#000',
     },
     input: {
       borderWidth: 1,
-      borderColor: '#ddd',
+      borderColor: isDarkMode ? '#333' : '#ddd',
       borderRadius: 8,
       padding: 12,
       fontSize: 16,
+      color: isDarkMode ? '#fff' : '#000',
     },
     textArea: {
       height: 100,
       textAlignVertical: 'top',
     },
+    picker: {
+      backgroundColor: isDarkMode ? '#2C2C2C' : '#fff',
+      color: isDarkMode ? '#fff' : '#000',
+      borderWidth: 1,
+      borderColor: isDarkMode ? '#333' : '#ddd',
+      borderRadius: 8,
+    },
     saveButton: {
       marginTop: 20,
+      marginBottom: 20,
       backgroundColor: '#0047AB',
-    },
-    picker: {
-      color: isDarkMode ? '#fff' : '#000',
-      backgroundColor: isDarkMode ? '#2C2C2C' : '#fff',
     },
   }); 
 
@@ -437,134 +469,135 @@ export default function EditPlanScreen() {
                 <Text style={styles.closeButton}>×</Text>
               </Pressable>
             </View>
+            
+            <ScrollView 
+              style={styles.modalScrollView}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={true}
+            >
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Type</Text>
+                <Picker
+                  selectedValue={exerciseDetails.type}
+                  style={[styles.picker, { color: isDarkMode ? '#fff' : '#000' }]}
+                  onValueChange={(value) => setExerciseDetails({...exerciseDetails, type: value})}
+                >
+                  <Picker.Item label="Rolig" value="rolig" />
+                  <Picker.Item label="Intervall" value="intervall" />
+                  <Picker.Item label="Hvile" value="hvile" />
+                  <Picker.Item label="Alternativ" value="alternativ" />
+                </Picker>
+              </View>
 
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Type</Text>
-              <Picker
-                selectedValue={exerciseDetails.type}
-                style={[styles.picker, { color: isDarkMode ? '#fff' : '#000' }]}
-                onValueChange={(value) => setExerciseDetails({...exerciseDetails, type: value})}
-              >
-                <Picker.Item label="Rolig" value="rolig" />
-                <Picker.Item label="Intervall" value="intervall" />
-                <Picker.Item label="Hvile" value="hvile" />
-                <Picker.Item label="Alternativ" value="alternativ" />
-              </Picker>
-            </View>
+              {exerciseDetails.type === 'intervall' && (
+                <>
+                  <View style={styles.formGroup}>
+                    <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Set</Text>
+                    <TextInput
+                      style={[styles.input, { color: isDarkMode ? '#fff' : '#000' }]}
+                      placeholder="f.eks., 3"
+                      value={exerciseDetails.sets}
+                      onChangeText={(text) => setExerciseDetails({...exerciseDetails, sets: text})}
+                      keyboardType="numeric"
+                    />
+                  </View>
 
-            {exerciseDetails.type === 'intervall' && (
-              <>
-                <View style={styles.formGroup}>
-                  <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Set</Text>
-                  <TextInput
-                    style={[styles.input, { color: isDarkMode ? '#fff' : '#000' }]}
-                    placeholder="f.eks., 3"
-                    value={exerciseDetails.sets}
-                    onChangeText={(text) => setExerciseDetails({...exerciseDetails, sets: text})}
-                    keyboardType="numeric"
-                  />
-                </View>
+                  <View style={styles.formGroup}>
+                    <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Rep</Text>
+                    <TextInput
+                      style={[styles.input, { color: isDarkMode ? '#fff' : '#000' }]}
+                      placeholder="f.eks., 12"
+                      value={exerciseDetails.reps}
+                      onChangeText={(text) => setExerciseDetails({...exerciseDetails, reps: text})}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </>
+              )}
 
-                <View style={styles.formGroup}>
-                  <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Rep</Text>
-                  <TextInput
-                    style={[styles.input, { color: isDarkMode ? '#fff' : '#000' }]}
-                    placeholder="f.eks., 12"
-                    value={exerciseDetails.reps}
-                    onChangeText={(text) => setExerciseDetails({...exerciseDetails, reps: text})}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </>
-            )}
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Velg en mal (valgfritt)</Text>
+                <Picker
+                  selectedValue=""
+                  onValueChange={(itemValue) => {
+                    if (!itemValue) return;
+                    const template = templates.find(t => t.id === Number(itemValue));
+                    if (template) {
+                      setExerciseDetails({
+                        name: template.name,
+                        sets: template.sets?.toString() || '0',
+                        reps: template.reps?.toString() || '0',
+                        duration_minutes: template.duration_minutes.toString(),
+                        distance: template.distance || '',
+                        description: template.description || '',
+                        type: template.type
+                      });
+                    }
+                  }}
+                  style={{ color: isDarkMode ? '#fff' : '#000', backgroundColor: isDarkMode ? '#2C2C2C' : '#fff'}}
+                >
+                  <Picker.Item label="Velg en mal..." value="" />
+                  {templates.map(template => (
+                    <Picker.Item 
+                      key={template.id?.toString()}
+                      label={`${template.name} (${template.type})`}
+                      value={template.id?.toString()}
+                    />
+                  ))}
+                </Picker>
+              </View>
 
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Velg en mal (valgfritt)</Text>
-              <Picker
-                selectedValue=""
-                onValueChange={(itemValue) => {
-                  if (!itemValue) return;
-                  const template = templates.find(t => t.id === Number(itemValue));
-                  if (template) {
-                    setExerciseDetails({
-                      name: template.name,
-                      sets: template.sets?.toString() || '0',
-                      reps: template.reps?.toString() || '0',
-                      duration_minutes: template.duration_minutes.toString(),
-                      distance: template.distance || '',
-                      description: template.description || '',
-                      type: template.type
-                    });
-                  }
-                }}
-                style={{ color: isDarkMode ? '#fff' : '#000', backgroundColor: isDarkMode ? '#2C2C2C' : '#fff'}}
-              >
-                <Picker.Item label="Velg en mal..." value="" style={{ color: isDarkMode ? '#000' : '#000'}}/>
-                {templates.map(template => (
-                  <Picker.Item 
-                    style={{ color: isDarkMode ? '#000' : '#000'}}
-                    key={template.id?.toString()}
-                    label={`${template.name} (${template.type})`}
-                    value={template.id?.toString()}
-                  />
-                ))}
-              </Picker>
-            </View>
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Navn</Text>
+                <TextInput
+                  style={[styles.input, { color: isDarkMode ? '#fff' : '#000' }]}
+                  placeholder="f.eks., Sprint"
+                  value={exerciseDetails.name}
+                  onChangeText={(text) => setExerciseDetails({...exerciseDetails, name: text})}
+                />
+              </View>
 
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Navn</Text>
-              <TextInput
-                style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ddd' }]}
-                placeholder="f.eks., Sprint"
-                placeholderTextColor={isDarkMode ? '#666' : '#999'}
-                value={exerciseDetails.name}
-                onChangeText={(text) => setExerciseDetails({...exerciseDetails, name: text})}
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Varighet (minutter)</Text>
+                <TextInput
+                  style={[styles.input, { color: isDarkMode ? '#fff' : '#000' }]}
+                  placeholder="f.eks., 30"
+                  value={exerciseDetails.duration_minutes}
+                  onChangeText={(text) => setExerciseDetails({...exerciseDetails, duration_minutes: text})}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Distanse (km)</Text>
+                <TextInput
+                  style={[styles.input, { color: isDarkMode ? '#fff' : '#000' }]}
+                  placeholder="f.eks., 5"
+                  value={exerciseDetails.distance}
+                  onChangeText={(text) => setExerciseDetails({...exerciseDetails, distance: text})}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Kommentar</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea, { color: isDarkMode ? '#fff' : '#000' }]}
+                  placeholder="Tilføy kommentar..."
+                  multiline
+                  numberOfLines={4}
+                  value={exerciseDetails.description}
+                  onChangeText={(text) => setExerciseDetails({...exerciseDetails, description: text})}
+                />
+              </View>
+
+              <Button
+                title={selectedExercise ? 'Oppdater trening' : 'Legg til trening'}
+                onPress={handleSaveExercise}
+                variant="primary"
+                style={styles.saveButton}
               />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Varighet (minutter)</Text>
-              <TextInput
-                style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ddd' }]}
-                placeholder="f.eks., 30"
-                placeholderTextColor={isDarkMode ? '#666' : '#999'}
-                value={exerciseDetails.duration_minutes}
-                onChangeText={(text) => setExerciseDetails({...exerciseDetails, duration_minutes: text})}
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Distanse (km)</Text>
-              <TextInput
-                style={[styles.input, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ddd' }]}
-                placeholder="f.eks., 5"
-                placeholderTextColor={isDarkMode ? '#666' : '#999'}
-                value={exerciseDetails.distance}
-                onChangeText={(text) => setExerciseDetails({...exerciseDetails, distance: text})}
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: isDarkMode ? '#fff' : '#000' }]}>Kommentar</Text>
-              <TextInput
-                style={[styles.input, styles.textArea, { color: isDarkMode ? '#fff' : '#000', borderColor: isDarkMode ? '#333' : '#ddd' }]}
-                placeholder="Tilføy kommentar..."
-                multiline
-                placeholderTextColor={isDarkMode ? '#666' : '#999'}
-                numberOfLines={4}
-                value={exerciseDetails.description}
-                onChangeText={(text) => setExerciseDetails({...exerciseDetails, description: text})}
-              />
-            </View>
-
-            <Button
-              title={selectedExercise ? 'Oppdater trening' : 'Legg til trening'}
-              onPress={handleSaveExercise}
-              variant="primary"
-              style={styles.saveButton}
-            />
+            </ScrollView>
           </View>
         </View>
       </Modal>

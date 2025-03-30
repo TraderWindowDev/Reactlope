@@ -1,13 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { router, Tabs } from 'expo-router';
+import { router, Tabs, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { TouchableOpacity, View, StyleSheet, Pressable, Text, AppState, AppStateStatus } from 'react-native';
+import { TouchableOpacity, View, StyleSheet, Pressable, Text, AppState, AppStateStatus, Image } from 'react-native';
 import { useTheme } from '@/src/context/ThemeContext';
 import { DrawerActions, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useNotifications } from '@/src/context/NotificationContext';
 import { useMessages } from '@/src/context/MessagesContext';
 import { useAuth } from '@/src/context/AuthContext';
-import { Link } from 'expo-router';
 import { supabase } from '@/src/lib/supabase';
 import { useUnreadMessages } from '@/src/hooks/useUnreadMessages';
 
@@ -25,6 +24,10 @@ export default function TabLayout() {
 
   // Calculate total unread messages from context
   const unreadMessagesCount = localUnreadCount || contextUnreadCount;
+
+  // Logo colors
+  const primaryColor = '#6A3DE8'; // Purple from logo
+  const secondaryColor = '#3D7BE8'; // Blue from logo
 
   // Function to fetch unread count directly
   const fetchUnreadCount = async () => {
@@ -80,7 +83,6 @@ export default function TabLayout() {
           filter: `recipient_id.eq.${session.user.id}`
         }, 
         (payload) => {
-          console.log('New message detected in tab layout:', payload);
           fetchUnreadCount();
         }
       )
@@ -253,12 +255,26 @@ export default function TabLayout() {
       screenOptions={{
         headerTintColor: isDarkMode ? '#fff' : '#000',
         tabBarStyle: {
-          backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+          backgroundColor: isDarkMode ? '#000b15' : '#fff',
+          borderTopWidth: 0.2,
+          borderTopColor: '#6A3DE8',
         },
         headerStyle: {
-          backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+          backgroundColor: isDarkMode ? '#000b15' : '#fff',
+          height: 110,
+          borderBottomWidth: 0.2,
+          borderBottomColor: '#6A3DE8',
         },
-        tabBarActiveTintColor: '#0047AB',
+        tabBarActiveTintColor: primaryColor,
+        headerLeft: () => (
+          <View style={{ marginLeft: 15, flexDirection: 'row', alignItems: 'center' }}>
+            <Image 
+              source={require('../../assets/images/LP2.png')} 
+              style={{ width: 40, height: 35 }}
+              resizeMode="contain"
+            />
+          </View>
+        ),
         headerRight: () => (
           <View style={{ flexDirection: 'row', gap: 16, marginRight: 16 }}>
             <Link href="/messages" asChild>
@@ -309,11 +325,18 @@ export default function TabLayout() {
     <Tabs.Screen
         name="training"
         options={{
-          title: isCoach ? 'Treningsplaner' : 'Min Plan',
-          tabBarLabel: isCoach ? 'Treningsplaner' : 'Min Plan',
+          title: isCoach ? 'Treningsplaner' : 'Din Plan',
+          tabBarLabel: isCoach ? 'Treningsplaner' : 'Din Plan',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="fitness-outline" size={size} color={color} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="diet"
+        options={{
+          title: "Diett",
+          tabBarIcon: ({ color, size }) => <Ionicons name="restaurant" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -329,7 +352,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="podcasts"
         options={{
-          title: 'Podcasts',
+          title: 'Podkast',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="mic-outline" size={size} color={color} />
           ),
@@ -406,6 +429,7 @@ export default function TabLayout() {
           },
         }}
       />
+      
 
     </Tabs>
   );

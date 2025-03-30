@@ -81,14 +81,23 @@ export default function NotificationsScreen() {
         onPress={() => router.back()} 
       />
       <Text style={[styles.customHeaderTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
-        Notifications
+        Notifikasjoner
       </Text>
     </View>
   );
 
   const clearAllNotifications = async () => {
     try {
-      await supabase.from('notifications').delete().eq('user_id', session?.user?.id);
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('user_id', session?.user?.id);
+
+      if (error) {
+        console.error('Error clearing notifications:', error);
+        return;
+      }
+
       await refreshNotifications();
     } catch (error) {
       console.error('Error clearing notifications:', error);
@@ -180,6 +189,7 @@ export default function NotificationsScreen() {
       justifyContent: 'center',
       alignItems: 'center',
       padding: 20,
+      backgroundColor: isDarkMode ? '#05101a' : '#f5f5f5',
     },
     emptyText: {
       marginTop: 8,
@@ -190,9 +200,9 @@ export default function NotificationsScreen() {
       alignItems: 'center',
       padding: 16,
       paddingTop: 60,
-      backgroundColor: isDarkMode ? '#121212' : '#fff',
-      borderBottomWidth: 1,
-      borderBottomColor: isDarkMode ? '#2C2C2C' : '#f0f0f0',
+      backgroundColor: isDarkMode ? '#000b15' : '#fff',
+      borderBottomWidth: 0.2,
+      borderBottomColor: isDarkMode ? '#6A3DE8' : '#f0f0f0',
     },
     customHeaderTitle: {
       fontSize: 20,
@@ -206,16 +216,18 @@ export default function NotificationsScreen() {
       marginLeft: 10,
     },
     clearButton: {
-      backgroundColor: isDarkMode ? '#2C2C2C' : '#f5f5f5',
+      backgroundColor: isDarkMode ? '#000b15' : '#f5f5f5',
       color: isDarkMode ? '#fff' : '#000',
+      borderWidth: 0.2,
+      borderColor: isDarkMode ? '#6A3DE8' : '#f0f0f0',
     },
   });
   return (
     <>
       <CustomHeader />
-      <View style={[styles.container, { backgroundColor: isDarkMode ? '#121212' : '#f5f5f5' }]}>
+      <View style={[styles.container, { backgroundColor: isDarkMode ? '#05101a' : '#f5f5f5' }]}>
         <View style={styles.clearButtonContainer}>
-          <Button title="Clear All" style={styles.clearButton} onPress={clearAllNotifications} />
+          <Button title="Slett alle" style={styles.clearButton} onPress={clearAllNotifications} />
         </View>
         {notifications.length > 0 ? (
           // TODO: Add a clear button

@@ -117,7 +117,6 @@ export default function MessagesScreen() {
           table: 'messages'
         }, 
         (payload) => {
-          console.log('New message detected in messages screen:', payload);
           fetchLocalChats();
         }
       )
@@ -233,12 +232,12 @@ export default function MessagesScreen() {
       <Pressable
         style={[
           styles.chatItem,
-          { backgroundColor: isDarkMode ? '#1E1E1E' : '#fff' }
+          { backgroundColor: isDarkMode ? '#000b15' : '#f5f5f5', borderBottomWidth: 0.2, borderBottomColor: isDarkMode ? '#6A3DE8' : '#f0f0f0' }
         ]}
         onPress={() => navigateToChat(item.id)}
       >
         <Image
-          source={{ uri: item.avatar_url || 'https://via.placeholder.com/40' }}
+          source={{ uri: item.avatar_url || require('@/assets/images/LP.png') }}
           style={styles.avatar}
         />
         <View style={styles.chatContent}>
@@ -313,9 +312,10 @@ export default function MessagesScreen() {
     header: {
       flexDirection: 'row',
       alignItems: 'center',
+
       padding: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: isDarkMode ? '#2C2C2C' : '#f0f0f0',
+      borderBottomWidth: 0.2,
+      borderBottomColor: isDarkMode ? '#6A3DE8' : '#f0f0f0',
       paddingTop: Platform.OS === 'ios' ? 60 : 20,
     },
     backButton: {
@@ -373,6 +373,7 @@ export default function MessagesScreen() {
     loadingContainer: {
       flex: 1,
       justifyContent: 'center',
+      backgroundColor: isDarkMode ? '#05101a' : '#f5f5f5',
       alignItems: 'center',
     },
     userItem: {
@@ -428,14 +429,14 @@ export default function MessagesScreen() {
 
   return (
     <>
-      <View style={[styles.header, { backgroundColor: isDarkMode ? '#1E1E1E' : '#fff' }]}>
+      <View style={[styles.header, { backgroundColor: isDarkMode ? '#000b15' : '#fff' }]}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={isDarkMode ? '#fff' : '#000'} />
         </Pressable>
         <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>Meldinger</Text>
       </View>
 
-      <View style={[styles.container, { backgroundColor: isDarkMode ? '#121212' : '#f5f5f5' }]}>
+      <View style={[styles.container, { backgroundColor: isDarkMode ? '#05101a' : '#f5f5f5' }]}>
         {renderCoachSection()}
 
         {localLoading && displayChats.length === 0 ? (

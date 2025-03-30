@@ -162,8 +162,183 @@ export default function CalculatorScreen() {
     return items;
   };
 
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      padding: 16,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      marginLeft: 8,
+    },
+    card: {
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      borderWidth: 0.2,
+      borderColor: '#6A3DE8',
+      elevation: 2,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      marginBottom: 8,
+    },
+    subtitle: {
+      fontSize: 14,
+      marginBottom: 16,
+    },
+    inputRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+    },
+    inputContainer: {
+      width: '40%',
+      borderRadius: 8,
+      padding: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    input: {
+      fontSize: 28,
+      fontWeight: 'bold',
+      textAlign: 'center',
+    },
+    inputLabel: {
+      fontSize: 12,
+      marginTop: 4,
+    },
+    optionsGrid: {
+      width: '55%',
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+    },
+    optionButton: {
+      width: '48%',
+      borderRadius: 8,
+      padding: 12,
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    calculationToggle: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 16,
+    },
+    toggleButton: {
+      width: '48%',
+      borderRadius: 8,
+      backgroundColor: isDarkMode ? '#05101a' : '#e6eef7',
+      padding: 12,
+      alignItems: 'center',
+      borderWidth: 0.2,
+      borderColor: 'transparent',
+    },
+    timeAndPaceRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    timeContainer: {
+      width: '48%',
+      borderRadius: 8,
+      padding: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: 80,
+    },
+    timeDisplay: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      textAlign: 'center',
+    },
+    paceContainer: {
+      width: '48%',
+      borderRadius: 8,
+      padding: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: 80,
+    },
+    paceDisplay: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      textAlign: 'center',
+    },
+    resultsContainer: {
+      marginTop: 8,
+    },
+    resultItem: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    resultLabel: {
+      fontSize: 16,
+    },
+    resultValue: {
+      fontSize: 16,
+      fontWeight: 'bold',
+    },
+    pickerModalContainer: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    pickerContainer: {
+      paddingBottom: 20,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+    },
+    pickerHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      padding: 16,
+      borderBottomWidth: 1,
+    },
+    pickerCancel: {
+      fontSize: 16,
+    },
+    pickerDone: {
+      fontSize: 16,
+      color: '#0047AB',
+      fontWeight: '600',
+    },
+    pickerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    pickerColumn: {
+      width: '33%',
+      alignItems: 'center',
+    },
+    picker: {
+      width: '100%',
+    },
+    pickerLabel: {
+      marginTop: 4,
+    },
+    pickerCenterLabel: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      textAlign: 'center',
+      marginTop: 8,
+    },
+  }); 
+
   return (
-    <ScrollView style={[styles.container, { backgroundColor: isDarkMode ? '#121212' : '#f5f5f5' }]}>
+    <ScrollView style={[styles.container, { backgroundColor: isDarkMode ? '#05101a' : '#f5f5f5' }]}>
       <View style={styles.header}>
         <Ionicons name="calculator-outline" size={24} color={isDarkMode ? '#fff' : '#000'} />
         <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>
@@ -172,7 +347,7 @@ export default function CalculatorScreen() {
       </View>
 
       {/* Distance Input Section */}
-      <View style={[styles.card, { backgroundColor: isDarkMode ? '#1E1E1E' : '#fff' }]}>
+      <View style={[styles.card, { backgroundColor: isDarkMode ? '#000b15' : '#fff' }]}>
         <Text style={[styles.sectionTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
           Velg distanse
         </Text>
@@ -182,7 +357,7 @@ export default function CalculatorScreen() {
         
         <View style={styles.inputRow}>
           <TouchableOpacity 
-            style={[styles.inputContainer, { backgroundColor: isDarkMode ? '#2C2C2C' : '#f9f9f9' }]}
+            style={[styles.inputContainer, { backgroundColor: isDarkMode ? '#05101a' : '#f9f9f9' }]}
             onPress={openDistancePicker}
           >
             <Text style={[styles.input, { color: isDarkMode ? '#fff' : '#000' }]}>
@@ -199,7 +374,7 @@ export default function CalculatorScreen() {
                 key={option.value}
                 style={[
                   styles.optionButton,
-                  { backgroundColor: isDarkMode ? '#2C2C2C' : '#e6eef7' }
+                  { backgroundColor: isDarkMode ? '#05101a' : '#e6eef7' }
                 ]}
                 onPress={() => selectDistanceOption(option.value)}
               >
@@ -213,7 +388,7 @@ export default function CalculatorScreen() {
       </View>
 
       {/* Time and Pace Section */}
-      <View style={[styles.card, { backgroundColor: isDarkMode ? '#1E1E1E' : '#fff' }]}>
+      <View style={[styles.card, { backgroundColor: isDarkMode ? '#000b15' : '#fff' }]}>
         <Text style={[styles.sectionTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
           Velg sluttid og tempo
         </Text>
@@ -223,8 +398,8 @@ export default function CalculatorScreen() {
             style={[
               styles.toggleButton,
               calculationMode === 'time' && { 
-                backgroundColor: isDarkMode ? '#2C2C2C' : '#e6eef7',
-                borderColor: '#0047AB'
+                backgroundColor: isDarkMode ? '#05101a' : '#e6eef7',
+                borderColor: '#6A3DE8'
               }
             ]}
             onPress={() => setCalculationMode('time')}
@@ -238,8 +413,8 @@ export default function CalculatorScreen() {
             style={[
               styles.toggleButton,
               calculationMode === 'pace' && { 
-                backgroundColor: isDarkMode ? '#2C2C2C' : '#e6eef7',
-                borderColor: '#0047AB'
+                backgroundColor: isDarkMode ? '#05101a' : '#e6eef7',
+                borderColor: '#6A3DE8'
               }
             ]}
             onPress={() => setCalculationMode('pace')}
@@ -254,7 +429,7 @@ export default function CalculatorScreen() {
           <TouchableOpacity 
             style={[
               styles.timeContainer, 
-              { backgroundColor: isDarkMode ? '#2C2C2C' : '#f9f9f9', opacity: calculationMode === 'pace' ? 0.7 : 1 }
+              { backgroundColor: isDarkMode ? '#05101a' : '#f9f9f9', opacity: calculationMode === 'pace' ? 0.7 : 1 }
             ]}
             onPress={openTimePicker}
             disabled={calculationMode === 'pace'}
@@ -270,7 +445,7 @@ export default function CalculatorScreen() {
           <TouchableOpacity 
             style={[
               styles.paceContainer, 
-              { backgroundColor: isDarkMode ? '#2C2C2C' : '#f9f9f9', opacity: calculationMode === 'time' ? 0.7 : 1 }
+              { backgroundColor: isDarkMode ? '#05101a' : '#f9f9f9', opacity: calculationMode === 'time' ? 0.7 : 1 }
             ]}
             onPress={openPacePicker}
             disabled={calculationMode === 'time'}
@@ -286,7 +461,7 @@ export default function CalculatorScreen() {
       </View>
 
       {/* Results Section */}
-      <View style={[styles.card, { backgroundColor: isDarkMode ? '#1E1E1E' : '#fff' }]}>
+      <View style={[styles.card, { backgroundColor: isDarkMode ? '#000b15' : '#fff' }]}>
         <Text style={[styles.sectionTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
           Resultater
         </Text>
@@ -511,174 +686,3 @@ export default function CalculatorScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  card: {
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    marginBottom: 16,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  inputContainer: {
-    width: '40%',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  input: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  inputLabel: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  optionsGrid: {
-    width: '55%',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  optionButton: {
-    width: '48%',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  calculationToggle: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  toggleButton: {
-    width: '48%',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  timeAndPaceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  timeContainer: {
-    width: '48%',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 80,
-  },
-  timeDisplay: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  paceContainer: {
-    width: '48%',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 80,
-  },
-  paceDisplay: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  resultsContainer: {
-    marginTop: 8,
-  },
-  resultItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  resultLabel: {
-    fontSize: 16,
-  },
-  resultValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  pickerModalContainer: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  pickerContainer: {
-    paddingBottom: 20,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-  },
-  pickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: 1,
-  },
-  pickerCancel: {
-    fontSize: 16,
-  },
-  pickerDone: {
-    fontSize: 16,
-    color: '#0047AB',
-    fontWeight: '600',
-  },
-  pickerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  pickerColumn: {
-    width: '33%',
-    alignItems: 'center',
-  },
-  picker: {
-    width: '100%',
-  },
-  pickerLabel: {
-    marginTop: 4,
-  },
-  pickerCenterLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginTop: 8,
-  },
-}); 

@@ -215,6 +215,7 @@ export default function Profile() {
   const styles = StyleSheet.create({
     container: {
       flex: 1,
+      backgroundColor: isDarkMode ? '#05101a' : '#f5f5f5'
     },
     header: {
       alignItems: 'center',
@@ -252,6 +253,7 @@ export default function Profile() {
       flex: 1,
       padding: 15,
       borderRadius: 12,
+      borderWidth: 0.2,
       alignItems: 'center',
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
@@ -287,6 +289,7 @@ export default function Profile() {
     activityContainer: {
       marginTop: 20,
       padding: 20,
+      borderWidth: 0.2,
       borderRadius: 12,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
@@ -327,7 +330,7 @@ export default function Profile() {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: isDarkMode ? '#121212' : '#f5f5f5'
+      backgroundColor: isDarkMode ? '#05101a' : '#f5f5f5'
     },
     loadingText: {
       fontSize: 16,
@@ -357,6 +360,8 @@ export default function Profile() {
     chartCard: {
       padding: 20,
       margin:20,
+      borderWidth: 0.2,
+      borderColor: '#6A3DE8',
       borderRadius: 12,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
@@ -368,7 +373,7 @@ export default function Profile() {
   
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: isDarkMode ? '#121212' : '#f5f5f5' }]}>
+      <View style={[styles.loadingContainer, { backgroundColor: isDarkMode ? '#05101a' : '#f5f5f5' }]}>
         <ActivityIndicator size="large" color={isDarkMode ? '#fff' : '#000'} />
         <Text style={[styles.loadingText, { color: isDarkMode ? '#fff' : '#000' }]}>
           Laster profil...
@@ -377,7 +382,7 @@ export default function Profile() {
     );
   }
   return (
-    <ScrollView style={[styles.container, { backgroundColor: isDarkMode ? '#121212' : '#f5f5f5' }]}>
+    <ScrollView style={[styles.container, { backgroundColor: isDarkMode ? '#05101a' : '#f5f5f5' }]}>
       
       {/* Profile Header */}
       <View style={styles.header}>
@@ -400,7 +405,7 @@ export default function Profile() {
         </Text>
         
         <View style={styles.statsGrid}>
-          <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#2C2C2C' : '#fff' }]}>
+          <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#000b15' : '#fff', borderColor: isDarkMode ? '#6A3DE8' : '#000'}]}>
             <Text style={[styles.statNumber, { color: isDarkMode ? '#fff' : '#000' }]}>
               {weeklyStats.completedExercises}/{weeklyStats.totalExercises}
             </Text>
@@ -408,7 +413,7 @@ export default function Profile() {
               Øvelser fullført
             </Text>
           </View>
-          <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#2C2C2C' : '#fff' }]}>
+          <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#000b15' : '#fff', borderColor: isDarkMode ? '#6A3DE8' : '#000'}]}>
             <Text style={[styles.statNumber, { color: isDarkMode ? '#fff' : '#000' }]}>
               {weeklyStats.totalMinutes}
             </Text>
@@ -419,7 +424,7 @@ export default function Profile() {
         </View>
         <View style={[
           styles.activityContainer,
-          { backgroundColor: isDarkMode ? '#2C2C2C' : '#fff' }
+          { backgroundColor: isDarkMode ? '#000b15' : '#fff', borderColor: isDarkMode ? '#6A3DE8' : '#000' }
         ]}>
           <Text style={[styles.sectionTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
             Aktivitet
@@ -479,7 +484,7 @@ export default function Profile() {
       {/* Activity Chart */}
       <View style={[
         styles.chartCard,
-        { backgroundColor: isDarkMode ? '#2C2C2C' : '#fff', marginTop: 16 }
+        { backgroundColor: isDarkMode ? '#000b15' : '#fff', marginTop: 16 }
       ]}>
         <Text style={[styles.sectionTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
           Denne uken
@@ -519,9 +524,9 @@ export default function Profile() {
           width={screenWidth - 100}
           height={180}
           chartConfig={{
-            backgroundColor: isDarkMode ? '#2C2C2C' : '#fff',
-            backgroundGradientFrom: isDarkMode ? '#2C2C2C' : '#fff',
-            backgroundGradientTo: isDarkMode ? '#2C2C2C' : '#fff',
+            backgroundColor: isDarkMode ? '#000b15' : '#fff',
+            backgroundGradientFrom: isDarkMode ? '#000b15' : '#fff',
+            backgroundGradientTo: isDarkMode ? '#000b15' : '#fff',
             decimalPlaces: 0,
             color: (opacity = 1) => isDarkMode ? `rgba(255, 255, 255, ${opacity})` : `rgba(0, 0, 0, ${opacity})`,
             labelColor: (opacity = 1) => isDarkMode ? `rgba(255, 255, 255, ${opacity})` : `rgba(0, 0, 0, ${opacity})`,

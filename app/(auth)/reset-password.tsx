@@ -1,17 +1,27 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, Alert, TextInput, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Alert, TextInput, Pressable, Image, ActivityIndicator } from 'react-native';
 import { supabase } from '@/src/lib/supabase';
 import { router } from 'expo-router';
 import { useTheme } from '@/src/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function ResetPasswordScreen() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const { isDarkMode } = useTheme();
 
+  // Logo colors
+  const primaryColor = '#6A3DE8'; // Purple from logo
+  const secondaryColor = '#3D7BE8'; // Blue from logo
+
   const handleResetPassword = async () => {
+    if (!email) {
+      Alert.alert('Error', 'Please enter your email address');
+      return;
+    }
+
     try {
       setLoading(true);
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -32,65 +42,87 @@ export default function ResetPasswordScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: isDarkMode ? '#000' : '#fff' }]}>
-      {/* Back Button */}
-      <Pressable 
-        style={styles.backButton} 
-        onPress={() => router.back()}
-      >
-        <Ionicons 
-          name="arrow-back" 
-          size={24} 
-          color={isDarkMode ? '#fff' : '#000'} 
-        />
-      </Pressable>
-
-      <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>
-        Reset Password
-      </Text>
-      
-      <Text style={[styles.subtitle, { color: isDarkMode ? '#999' : '#666' }]}>
-        Enter your email address and we'll send you a link to reset your password.
-      </Text>
-
-      <TextInput
-        style={[
-          styles.input, 
-          { 
-            backgroundColor: isDarkMode ? '#333' : '#fff',
-            borderColor: isDarkMode ? '#444' : '#ddd',
-            color: isDarkMode ? '#fff' : '#000'
-          }
-        ]}
-        placeholder="Enter your email"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        placeholderTextColor={isDarkMode ? '#999' : '#666'}
+    <View style={[styles.container, { backgroundColor: isDarkMode ? '#000b15' : '#fff' }]}>
+      {/* Background Logo */}
+      <Image 
+        source={require('../../assets/images/LP2.png')} 
+        style={styles.backgroundLogo}
+        resizeMode="contain"
+        opacity={0.1} // Very subtle in the background
       />
+      
+      {/* Main Content */}
+      <View style={styles.contentContainer}>
+        {/* Logo */}
+        <View style={styles.logoContainer}>
+          <Image 
+            source={require('../../assets/images/LP2.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
 
-      <Pressable 
-        style={[
-          styles.button,
-          { opacity: loading || !email ? 0.5 : 1 }
-        ]}
-        onPress={handleResetPassword}
-        disabled={loading || !email}
-      >
-        <Text style={styles.buttonText}>
-          {loading ? "Sending..." : "Send Reset Link"}
+        <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>
+          Reset Password
         </Text>
-      </Pressable>
-
-      <Pressable 
-        style={styles.cancelButton}
-        onPress={() => router.back()}
-      >
-        <Text style={[styles.cancelText, { color: isDarkMode ? '#fff' : '#000' }]}>
-          Back to Login
+        
+        <Text style={[styles.subtitle, { color: isDarkMode ? '#ccc' : '#666' }]}>
+          Enter your email address and we'll send you a link to reset your password.
         </Text>
-      </Pressable>
+        
+        {/* Email input with gradient border */}
+        <View style={styles.inputContainer}>
+          <LinearGradient
+            colors={['#c82090', '#6a14d1']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.gradientBorder}
+          >
+            <View style={[
+              styles.inputInner,
+              { backgroundColor: isDarkMode ? '#000b15' : '#F8F9FA' }
+            ]}>
+              <TextInput
+                placeholder="Email"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                style={[
+                  styles.input,
+                  { color: isDarkMode ? '#fff' : '#000' }
+                ]}
+                placeholderTextColor={isDarkMode ? '#aaa' : '#888'}
+              />
+            </View>
+          </LinearGradient>
+        </View>
+        
+        <Pressable
+          style={[
+            styles.button,
+            { backgroundColor: !email ? `${primaryColor}80` : primaryColor },
+            !email && styles.disabledButton
+          ]}
+          onPress={handleResetPassword}
+          disabled={loading || !email}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.buttonText}>Send Reset Link</Text>
+          )}
+        </Pressable>
+        
+        <Pressable 
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Text style={[styles.backButtonText, { color: secondaryColor }]}>
+            Back to Login
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -98,14 +130,29 @@ export default function ResetPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    position: 'relative',
+  },
+  backgroundLogo: {
+    position: 'absolute',
+    width: '150%',
+    height: '150%',
+    top: '10%',
+    left: '50%',
+    transform: [{ translateX: -300 }, { translateY: -300 }],
+  },
+  contentContainer: {
+    flex: 1,
     padding: 20,
     justifyContent: 'center',
-  },
-  backButton: {
-    position: 'absolute',
-    top: 40,
-    left: 20,
     zIndex: 1,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  logo: {
+    width: 120,
+    height: 120,
   },
   title: {
     fontSize: 24,
@@ -114,40 +161,46 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 16,
     textAlign: 'center',
-    marginBottom: 32,
-    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  gradientBorder: {
+    borderRadius: 8,
+    padding: 1, // Border thickness
+  },
+  inputInner: {
+    borderRadius: 6.5,
+    overflow: 'hidden',
   },
   input: {
-    height: 48,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    padding: 15,
     fontSize: 16,
   },
   button: {
-    backgroundColor: '#0047AB',
-    height: 48,
+    padding: 15,
     borderRadius: 8,
-    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 16,
+    justifyContent: 'center',
+    height: 50,
+  },
+  disabledButton: {
+    opacity: 0.7,
   },
   buttonText: {
-    color: '#fff',
+    color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
-  cancelButton: {
-    marginTop: 16,
-    height: 48,
-    justifyContent: 'center',
+  backButton: {
+    marginTop: 20,
     alignItems: 'center',
   },
-  cancelText: {
+  backButtonText: {
     fontSize: 16,
-    textDecorationLine: 'underline',
+    fontWeight: '500',
   },
 });

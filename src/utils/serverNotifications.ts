@@ -9,23 +9,47 @@ export async function sendNotificationToUser(
   relatedId?: string
 ) {
   try {
-    // First, create a notification record in the database
-    const { data: notification, error: notificationError } = await supabase
+    // Check for existing notification
+    const { data: existingNotification, error: fetchError } = await supabase
       .from('notifications')
-      .insert({
-        user_id: userId,
-        type,
-        content: body,
-        sender_id: senderId,
-        related_id: relatedId,
-        read: false
-      })
-      .select()
+      .select('id')
+      .eq('user_id', userId)
+      .eq('sender_id', senderId)
+      .eq('type', type)
+      .eq('related_id', relatedId)
       .single();
-      
-    if (notificationError) {
-      console.error('Error creating notification:', notificationError);
+
+    if (fetchError) {
+      console.error('Error fetching existing notification:', fetchError);
       return;
+    }
+
+    if (existingNotification) {
+      // Update existing notification
+      const { error: updateError } = await supabase
+        .from('notifications')
+        .update({ content: body, read: false, updated_at: new Date().toISOString() })
+        .eq('id', existingNotification.id);
+
+      if (updateError) {
+        console.error('Error updating notification:', updateError);
+      }
+    } else {
+      // Create new notification
+      const { error: insertError } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: userId,
+          type,
+          content: body,
+          sender_id: senderId,
+          related_id: relatedId,
+          read: false
+        });
+
+      if (insertError) {
+        console.error('Error creating notification:', insertError);
+      }
     }
     
     // Then get the user's push token
@@ -44,7 +68,7 @@ export async function sendNotificationToUser(
     const notificationData = {
       type,
       senderId,
-      notificationId: notification.id
+      notificationId: existingNotification?.id || insertError?.id
     };
     
     if (relatedId) {

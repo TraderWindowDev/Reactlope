@@ -584,7 +584,7 @@ export default function ViewProgressScreen() {
       <ScrollView style={[styles.container, { backgroundColor: isDarkMode ? '#121212' : '#f5f5f5' }]}>
         <View style={[styles.header]}>
           <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>
-            {userName}'s Progress
+            {userName}'s Progresjon
           </Text>
           <Text style={[styles.subtitle, { color: isDarkMode ? '#fff' : '#000' }]}>
             4-ukers program

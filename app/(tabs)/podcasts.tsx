@@ -48,19 +48,21 @@ export default function PodcastScreen() {
   const styles = StyleSheet.create({
     container: {
       padding: 16,
-      backgroundColor: isDarkMode ? '#121212' : '#f5f5f5',
+      backgroundColor: isDarkMode ? '#05101a' : '#f5f5f5',
     },
     loadingContainer: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: isDarkMode ? '#121212' : '#f5f5f5',
+      backgroundColor: isDarkMode ? '#000b15' : '#f5f5f5',
     },
     episodeCard: {
       flexDirection: 'row',
-      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+      backgroundColor: isDarkMode ? '#000b15' : '#fff',
       borderRadius: 12,
       padding: 12,
+      borderWidth: 0.2,
+      borderColor: '#6A3DE8',
       marginBottom: 16,
       alignItems: 'center',
       shadowColor: '#000',
@@ -99,7 +101,7 @@ export default function PodcastScreen() {
       marginTop: 8,
     },
     playButtonText: {
-      color: isDarkMode ? '#0047AB' : '#1DB954',
+      color: isDarkMode ? '#fff' : '#1DB954',
       marginLeft: 4,
       fontSize: 14,
       fontWeight: '500',
@@ -138,7 +140,7 @@ export default function PodcastScreen() {
               {item.description}
             </Text>
             <View style={styles.playButton}>
-              <Ionicons name="play-circle" size={24} color={isDarkMode ? '#0047AB' : '#1DB954'} />
+              <Ionicons name="play-circle" size={24} color={isDarkMode ? '#fff' : '#1DB954'} />
               <Text style={styles.playButtonText}>Play on Spotify</Text>
             </View>
           </View>

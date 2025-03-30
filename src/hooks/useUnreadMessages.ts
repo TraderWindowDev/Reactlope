@@ -65,7 +65,6 @@ export function useUnreadMessages() {
           filter: `recipient_id=eq.${session.user.id}` 
         }, 
         (payload) => {
-          console.log("New message received via subscription:", payload);
           // Check if the new message is unread
           if (payload.new && !payload.new.read) {
             console.log("Incrementing unread count");

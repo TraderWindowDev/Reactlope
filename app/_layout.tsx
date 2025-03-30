@@ -16,7 +16,7 @@ import { startConnectionMonitoring } from '@/src/lib/supabase';
 import { PushNotificationProvider } from '@/src/context/PushNotificationContext';
 import { UnreadMessagesProvider } from '@/src/context/UnreadMessagesContext';
 import { Stack } from 'expo-router';
-
+import { Ionicons } from '@expo/vector-icons';
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     ...FontAwesome.font,
@@ -87,7 +87,7 @@ export default function RootLayout() {
                   <Stack.Screen name="(training)/plan-details" options={{ headerShown: false }} />
                   <Stack.Screen name="(training)/edit-plan" options={{ headerShown: false }} />
                   <Stack.Screen name="(training)/view-progress" options={{ headerShown: false }} />
-                  <Stack.Screen name="notification" options={{ headerShown: false }} />
+                  <Stack.Screen name="notification" options={{ headerShown: false, headerTitle: 'Notifikasjoner', headerLeft: () => <Ionicons name="arrow-back-outline" size={24} color="white" />, headerStyle: { backgroundColor: '#000b15'} }} />
                   <Stack.Screen name="(settings)" options={{ headerShown: false }} />
                 </Stack>
               </NotificationProvider>

@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, RefreshControl, ActivityIndicator, Linking, ScrollView, Pressable, Modal } from 'react-native';
-import { router, useRouter } from 'expo-router';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, Image, RefreshControl, ActivityIndicator, Linking, ScrollView, Pressable, Modal, TextInput, TouchableOpacity } from 'react-native';
+import { router, useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/context/AuthContext';
 import { Card } from '../../components/Card';
@@ -51,24 +51,53 @@ export default function TrainingScreen() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [greeting, setGreeting] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredUsers, setFilteredUsers] = useState<Profile[]>([]);
+  const [searchVisible, setSearchVisible] = useState(false);
 
-  useEffect(() => {
-    const initializeData = async () => {
+  // Logo colors
+  const primaryColor = '#6A3DE8'; // Purple from logo
+  const secondaryColor = '#3D7BE8'; // Blue from logo
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log("Screen focused - refreshing data");
+      
+      setUserProfile(null);
       setIsLoading(true);
-      try {
-        if (session?.user?.id) {
-          await fetchProfile();
-          await fetchSubscribedPlans();
+      
+      const refreshData = async () => {
+        try {
+          if (session?.user?.id) {
+            const { data, error } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+            
+            if (error) throw error;
+            
+            console.log("Fresh profile data:", data);
+            setUserProfile(data);
+            
+            if (data.is_premium) {
+              await fetchSubscribedPlans();
+            }
+          }
+        } catch (error) {
+          console.error('Error refreshing data:', error);
+        } finally {
+          setIsLoading(false);
         }
-      } catch (error) {
-        console.error('Error initializing data:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initializeData();
-  }, [session?.user?.id]);
+      };
+      
+      refreshData();
+      
+      return () => {
+        // Cleanup if needed
+      };
+    }, [session?.user?.id])
+  );
 
   useEffect(() => {
     if (!userProfile) return;
@@ -117,6 +146,14 @@ export default function TrainingScreen() {
     }
   }, [exercises]); // Depend on exercises so it updates when exercises are fetched
 
+  useEffect(() => {
+    setFilteredUsers(
+      users.filter(user =>
+        user.username.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    );
+  }, [searchQuery, users]);
+
   //  Fetch different messages depending on time of day ('good morning if time is before 12:00', 'good afternoon if time is >12:00 and >18:00', 'good evening if time is <18:00', 'Good evening if time is >18:00')
   const fetchGreeting = async () => {
     const currentTime = new Date().getHours();
@@ -131,63 +168,20 @@ export default function TrainingScreen() {
     return greeting;
   };
 
-  // Fetch profile
-
-  const fetchProfile = async () => {
+  const fetchUsers = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      
-      if (!session?.user.id) {
-        setLoading(false);
-        return;
-      }
-
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-
-      if (error) throw error;
-      setUserProfile(data);
-      
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchUsers = async () => {
-    try {
-      const { data: usersData, error: usersError } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          username,
-          avatar_url,
-          role,
-          is_premium,
-          user_training_plans!left (
-            plan_id,
-            training_plans!inner (
-              id,
-              title,
-              coach_id
-            )
-          )
-        `)
+        .select('id, username, avatar_url, role')
         .eq('role', 'user');
 
-      if (usersError) throw usersError;
-
-      setUsers(usersData || []);
-
+      if (error) throw error;
+      setUsers(data || []);
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
@@ -237,7 +231,10 @@ export default function TrainingScreen() {
         `)
         .eq('user_id', session?.user.id);
 
-      if (userPlansError) throw userPlansError;
+      if (userPlansError) {
+        console.error('Error fetching subscribed plans:', userPlansError);
+        return;
+      }
 
       const plansWithRemainingWeeks = userPlans.map(plan => {
         const remaining = calculateRemainingWeeks(plan.training_plans);
@@ -250,7 +247,7 @@ export default function TrainingScreen() {
 
       setSubscribedPlans(plansWithRemainingWeeks);
     } catch (error) {
-      console.error('Error fetching subscribed plans:', error);
+      console.error('Network error fetching subscribed plans:', error);
     } finally {
       setLoading(false);
     }
@@ -406,7 +403,7 @@ export default function TrainingScreen() {
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDarkMode ? '#121212' : '#f5f5f5',
+      backgroundColor: isDarkMode ? '#000b12' : '#f5f5f5',
       padding: 16,
     },
     greeting: {
@@ -463,8 +460,10 @@ export default function TrainingScreen() {
       marginBottom: 16,
     },
     planOverview: {
-      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+      backgroundColor: isDarkMode ? '#000b15' : '#fff',
       padding: 16,
+      borderWidth: 0.2,
+      borderColor: '#6A3DE8',
       borderRadius: 12,
       marginBottom: 24,
     },
@@ -514,14 +513,16 @@ export default function TrainingScreen() {
     daysContainer: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      height: '15%',
+      height: '15%'
     },
     dayColumn: {
       padding: 8,
       alignItems: 'center',
       width: '13%',
-      backgroundColor: '#1E1E1E',
+      backgroundColor: '#000b15',
       borderRadius: 5,
+      borderWidth: 0.2,
+      borderColor: '#6A3DE8',
       height: '100%',
     },
     dayDot: {
@@ -554,7 +555,7 @@ export default function TrainingScreen() {
       color: '#fff',
     },
     darkContainer: {
-      backgroundColor: '#121212',
+      backgroundColor: '#05101a',
     },
     modalOverlay: {
       flex: 1,
@@ -587,10 +588,10 @@ export default function TrainingScreen() {
     exerciseCard: {
       marginTop: 16,
       padding: 16,
-      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+      backgroundColor: isDarkMode ? '#000b15' : '#fff',
       borderRadius: 12,
-      borderWidth: 1,
-      borderColor: isDarkMode ? '#333' : '#eee',
+      borderWidth: 0.2,
+      borderColor: '#6A3DE8',
     },
     exerciseHeader: {
       flexDirection: 'row',
@@ -636,7 +637,7 @@ export default function TrainingScreen() {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: isDarkMode ? '#121212' : '#f5f5f5',
+      backgroundColor: isDarkMode ? '#000b15' : '#f5f5f5',
     },
     loadingText: {
       marginTop: 16,
@@ -675,18 +676,216 @@ export default function TrainingScreen() {
     createButton: {
       backgroundColor: '#0047AB',
       color: '#fff',
+      margin: 8,
     },
     templateButton: {
       backgroundColor: '#0047AB',
       color: '#fff',
-      margin: 8,
+      marginTop: 10,
+    },
+    searchBar: {
+      height: 40,
+      borderColor: '#ccc',
+      borderWidth: 1,
+      borderRadius: 8,
+      paddingHorizontal: 8,
+      color: isDarkMode ? '#fff' : '#000',
+      marginBottom: 16,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: 'bold',
+    },
+    card: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 16,
+      marginVertical: 8,
+      backgroundColor: '#fff',
+      borderRadius: 8,
+      shadowColor: '#000',
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    darkCard: {
+      backgroundColor: '#1E1E1E',
+    },
+    email: {
+      fontSize: 14,
+      color: '#666',
+    },
+    modalContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: isDarkMode ? '#121212' : '#f5f5f5',
+    },
+    closeButton: {
+      fontSize: 16,
+      color: '#0047AB',
+    },
+    emptyContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 16,
+    },
+    emptyText: {
+      fontSize: 16,
+      color: '#666',
+    },
+    subscriptionCard: {
+      backgroundColor: '#f5f5f5',
+      borderRadius: 12,
+      padding: 20,
+      marginTop: 20,
+      marginHorizontal: 16,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    darkSubscriptionCard: {
+      backgroundColor: '#1E1E1E',
+      shadowColor: '#fff',
+      shadowOpacity: 0.05,
+    },
+    lockIcon: {
+      marginBottom: 16,
+    },
+    subscriptionTitle: {
+      fontSize: 22,
+      fontWeight: 'bold',
+      marginBottom: 8,
+      textAlign: 'center',
+    },
+    subscriptionText: {
+      fontSize: 16,
+      textAlign: 'center',
+      marginBottom: 20,
+      color: '#666',
+    },
+    darkSubscriptionText: {
+      color: '#aaa',
+    },
+    subscribeButton: {
+      backgroundColor: '#0047AB',
+      padding: 15,
+      borderRadius: 8,
+      alignItems: 'center',
+      width: '100%',
+    },
+    subscribeButtonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    testButton: {
+      marginTop: 12,
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: '#ccc',
+      backgroundColor: 'transparent',
+    },
+    darkTestButton: {
+      borderColor: '#fff',
+    },
+    darkTestButtonText: {
+      color: '#fff',
+    },
+    featuresList: {
+      marginTop: 30,
+      paddingHorizontal: 16,
+    },
+    featuresTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      marginBottom: 16,
+    },
+    featureItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    featureText: {
+      fontSize: 16,
+      marginLeft: 12,
     },
   });
+  const onSubscribe = async () => {
+    if (!session?.user?.id) {
+      alert('You need to be logged in to subscribe');
+      return;
+    }
+    
+    try {
+      setLoading(true); // Use loading state for button
+      
+      console.log('Updating premium status for user:', session.user.id);
+      
+      // Update the database
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ is_premium: true })
+        .eq('id', session.user.id)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('Error updating premium status:', error);
+        throw error;
+      }
+      
+      console.log('Premium status updated successfully:', data);
+      
+      // Update the local state with the returned data
+      setUserProfile(data);
+      
+      // Fetch plans now that user is premium
+      await fetchSubscribedPlans();
+      
+      alert('Premium features activated!');
+      
+    } catch (error) {
+      console.error('Error in onSubscribe:', error);
+      alert('Failed to activate premium features. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const validateDate = (dateString) => {
+    const date = new Date(dateString);
+    return !isNaN(date.getTime());
+  };
+
+  const hasPlanStarted = () => {
+    const startDateStr = subscribedPlans[0]?.training_plans?.start_date;
+    if (!startDateStr || !validateDate(startDateStr)) {
+      console.error('Invalid start date:', startDateStr);
+      return false;
+    }
+
+    const startDate = new Date(startDateStr);
+    const today = new Date();
+    return today >= startDate;
+  };
 
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0047AB" />
+        <ActivityIndicator size="large" color={primaryColor} />
         <Text style={[styles.loadingText, isDarkMode && styles.darkText]}>
           Laster inn treningsplan...
         </Text>
@@ -694,31 +893,109 @@ export default function TrainingScreen() {
     );
   }
 
-  // Coach view with users list
+  if (!userProfile?.is_premium) {
+    console.log("User is not premium, showing subscription prompt");
+    return (
+      <View style={[styles.container, isDarkMode && styles.darkContainer]}>
+        <Text style={[styles.greeting, isDarkMode && styles.darkText]}>
+          {greeting}, {userProfile?.username || ''} 
+        </Text>
+        
+        <View style={[
+          styles.subscriptionCard, 
+          isDarkMode && styles.darkSubscriptionCard
+        ]}>
+          <Ionicons 
+            name="lock-closed" 
+            size={40} 
+            color={isDarkMode ? primaryColor : primaryColor} 
+            style={styles.lockIcon}
+          />
+          <Text style={[styles.subscriptionTitle, isDarkMode && styles.darkText]}>
+            Premium Treningsplan
+          </Text>
+          <Text style={[styles.subscriptionText, isDarkMode && styles.darkSubscriptionText]}>
+            Kjøp Premium for å få tilgang til skreddersydde treningsplaner og trenerstøtte.
+          </Text>
+          <Pressable 
+            style={[styles.subscribeButton, { backgroundColor: primaryColor }]}
+            onPress={() => router.push('/(settings)/subscription')}
+          >
+            <Text style={styles.subscribeButtonText}>Subscribe Now</Text>
+          </Pressable>
+          
+          <Pressable 
+            style={[
+              styles.testButton, 
+              isDarkMode && styles.darkTestButton,
+              { borderColor: secondaryColor }
+            ]}
+            onPress={onSubscribe}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color={secondaryColor} />
+            ) : (
+              <Text style={[
+                styles.testButtonText, 
+                isDarkMode && styles.darkTestButtonText,
+                { color: secondaryColor }
+              ]}>
+                Test Premium (Dev Only)
+              </Text>
+            )}
+          </Pressable>
+        </View>
+        
+        <Text style={[styles.featuresTitle, isDarkMode && styles.darkText]}>
+          Premium funksjoner
+        </Text>
+        
+        <View style={styles.featuresList}>
+          <View style={styles.featureItem}>
+            <Ionicons 
+              name="checkmark-circle" 
+              size={24} 
+              color={secondaryColor} 
+            />
+            <Text style={[styles.featureText, isDarkMode && styles.darkText]}>
+              Skreddersydde treningsplaner
+            </Text>
+          </View>
+          
+          <View style={styles.featureItem}>
+            <Ionicons 
+              name="checkmark-circle" 
+              size={24} 
+              color={secondaryColor} 
+            />
+            <Text style={[styles.featureText, isDarkMode && styles.darkText]}>
+              Raske svar fra trener
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   if (userProfile?.role === 'coach') {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Button 
-            title="Administrer maler"
-            onPress={() => {
-              router.push('/(training)/manage-templates');
-            }}
-            style={[styles.templateButton, { 
-              backgroundColor: isDarkMode ? '#2C2C2C' : '#fff',
-              marginHorizontal: 16,
-              marginTop: 16,
-            }]}
-            textStyle={{ 
-              color: isDarkMode ? '#fff' : '#000'
-            }}
-          />
+          <Text style={[styles.title, isDarkMode && styles.darkText]}>Premium brukere</Text>
+         
         </View>
+        <TextInput
+          style={styles.searchBar}
+          placeholder="Search users..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
         {loading ? (
           <ActivityIndicator size="large" style={styles.loading} color="#0047AB"/>
         ) : (
           <FlatList
-            data={users.filter(user => user.is_premium)}
+            data={filteredUsers}
             renderItem={({ item }) => (
               <Card style={styles.userCard}>
                 <View style={styles.userInfo}>
@@ -751,7 +1028,7 @@ export default function TrainingScreen() {
             }
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No available clients</Text>
+                <Text style={styles.emptyText}>Ingen Premium brukere</Text>
               </View>
             }
           />
@@ -760,32 +1037,17 @@ export default function TrainingScreen() {
     );
   }
 
-  async function onSubscribe(): Promise<void> {
-    //Testing purposes, set is_premium to in the database supabase
-    const { data, error } = await supabase
-      .from('profiles')
-      .update({ is_premium: true })
-      .eq('id', session?.user.id);
-
-    if (error) {
-      console.error('Error updating profile:', error);
-    } else {
-      console.log('Profile updated successfully:', data);
-    }
-    router.reload();
-  }
-
-  // Add a helper function to check if plan has started
-  const hasPlanStarted = () => {
-    if (!subscribedPlans[0]?.training_plans?.start_date) return false;
-    const startDate = new Date(subscribedPlans[0].training_plans.start_date);
-    const today = new Date();
-    return today >= startDate;
-  };
-
-  // User view with their training plan
+  
   return (
     <View style={[styles.container, isDarkMode && styles.darkContainer]}>
+      {/* {userProfile?.role === 'coach' && (
+        <View style={styles.header}>
+          <Text style={[styles.title, isDarkMode && styles.darkText]}>Premium brukere</Text>
+          <TouchableOpacity onPress={() => setSearchVisible(true)}>
+            <Ionicons name="search" size={24} color={isDarkMode ? '#fff' : '#000'} />
+          </TouchableOpacity>
+        </View>
+      )} */}
       <Text style={[styles.greeting, isDarkMode && styles.darkText]}>
         {greeting}, {userProfile?.username || ''} 
       </Text>
@@ -915,6 +1177,20 @@ export default function TrainingScreen() {
           ))}
         </View>
       ) : null}
+      <Modal visible={searchVisible} animationType="slide">
+        <View style={styles.modalContainer}>
+          <TextInput
+            style={styles.searchBar}
+            placeholder="Søk etter brukere..."
+            placeholderTextColor={isDarkMode ? '#fff' : '#000'}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          <TouchableOpacity onPress={() => setSearchVisible(false)}>
+            <Text style={styles.closeButton}>Lukk</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 }

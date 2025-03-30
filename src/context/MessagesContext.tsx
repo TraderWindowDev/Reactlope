@@ -119,7 +119,6 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
 
   // Handle new message
   const handleNewMessage = async (payload) => {
-    console.log('New message received in MessagesContext:', payload);
     
     if (!payload.new) return;
     
