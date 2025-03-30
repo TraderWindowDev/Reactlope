@@ -3,9 +3,9 @@ const { createClient } = require('@supabase/supabase-js');
 const supabase = createClient('https://tokxsggxbetgxoypadoo.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRva3hzZ2d4YmV0Z3hveXBhZG9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzcwMjU0NjgsImV4cCI6MjA1MjYwMTQ2OH0.bagtfIUeeeaDPofMeUc6jnJrOTXm3nlZuc33dCM_BN4');
 
 async function createUsers() {
-  for (let i = 0; i < 25; i++) {
-    const email = `user${i}@test.com`;
-    const password = 'password123';
+  for (let i = 0; i < 1; i++) {
+    const email = `mikkel@test.com`;
+    const password = 'passord123';
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -32,7 +32,7 @@ async function createProfile(userId, i) {
     .from('profiles')
     .insert([{
       id: userId,
-      username: `user_${i}`,
+      username: `Mikkel`,
       avatar_url: `https://ui-avatars.com/api/?name=user_${i}`,
       bio: 'I am a Runner',
       role: 'user', // or 'coach' if needed

@@ -339,65 +339,67 @@ export default function TrainingScreen() {
     return dayExercises;
   };
 
-  // Add this helper function to get the week's date range
-  const getWeekDates = () => {
-    const today = new Date();
-    const monday = startOfWeek(today, { weekStartsOn: 1 });
-    const sunday = endOfWeek(today, { weekStartsOn: 1 });
+  // Modify the formatPlanTiming function to handle invalid dates
+  const formatPlanTiming = (startDate, durationWeeks) => {
+    if (!startDate || !durationWeeks) {
+      return 'Dato ikke satt';
+    }
     
-    return {
-      start: format(monday, 'd. MMMM', { locale: nb }),
-      end: format(sunday, 'd. MMMM', { locale: nb })
-    };
+    try {
+      const start = new Date(startDate);
+      
+      // Check if date is valid
+      if (isNaN(start.getTime())) {
+        return 'Ugyldig dato';
+      }
+      
+      const endDate = new Date(start);
+      endDate.setDate(start.getDate() + (durationWeeks * 7));
+      
+      return `${format(start, 'd. MMM', { locale: nb })} - ${format(endDate, 'd. MMM yyyy', { locale: nb })}`;
+    } catch (error) {
+      console.error('Error formatting plan timing:', error);
+      return 'Dato feil';
+    }
   };
 
-  // Helper function to format the time remaining or elapsed
-  const formatPlanTiming = (startDate: string, durationWeeks: number) => {
-    if (!startDate || !durationWeeks) return '';
-    
-    const start = new Date(startDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Reset time part for accurate day comparison
-    
-    // Calculate end date (start date + duration in weeks)
-    const endDate = new Date(start);
-    endDate.setDate(start.getDate() + (durationWeeks * 7 - 1)); // Subtract 1 to make it inclusive
-    
-    // If plan hasn't started yet
-    if (today < start) {
-      const diffTime = start.getTime() - today.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  // Modify the getWeekDates function to handle errors
+  const getWeekDates = () => {
+    try {
+      const now = new Date();
+      const start = startOfWeek(now, { weekStartsOn: 1 });
+      const end = endOfWeek(now, { weekStartsOn: 1 });
       
-      if (diffDays === 1) return 'Starter i morgen';
-      if (diffDays < 7) return `Starter om ${diffDays} dager`;
+      return {
+        start: format(start, 'd. MMM', { locale: nb }),
+        end: format(end, 'd. MMM', { locale: nb })
+      };
+    } catch (error) {
+      console.error('Error getting week dates:', error);
+      return { start: '---', end: '---' };
+    }
+  };
+
+  // Modify the hasPlanStarted function to handle invalid dates
+  const hasPlanStarted = () => {
+    if (!subscribedPlans[0]?.training_plans?.start_date) {
+      return false;
+    }
+    
+    try {
+      const startDate = new Date(subscribedPlans[0].training_plans.start_date);
       
-      const weeks = Math.floor(diffDays / 7);
-      if (weeks === 1) return 'Starter om 1 uke';
-      return `Starter om ${weeks} uker`;
+      // Check if date is valid
+      if (isNaN(startDate.getTime())) {
+        return false;
+      }
+      
+      const now = new Date();
+      return startDate <= now;
+    } catch (error) {
+      console.error('Error checking if plan has started:', error);
+      return false;
     }
-    
-    // If plan has ended
-    if (today > endDate) {
-      return 'Fullført';
-    }
-    
-    // If plan is in progress
-    const diffTime = endDate.getTime() - today.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // Add 1 to include the end date
-    
-    if (diffDays === 1) return '1 dag igjen';
-    if (diffDays < 7) return `${diffDays} dager igjen`;
-    
-    const weeks = Math.floor(diffDays / 7);
-    const remainingDays = diffDays % 7;
-    
-    if (weeks === 1) {
-      if (remainingDays === 0) return '1 uke igjen';
-      return `1 uke og ${remainingDays} dager igjen`;
-    }
-    
-    if (remainingDays === 0) return `${weeks} uker igjen`;
-    return `${weeks} uker og ${remainingDays} dager igjen`;
   };
 
   const styles = StyleSheet.create({
@@ -870,18 +872,6 @@ export default function TrainingScreen() {
     return !isNaN(date.getTime());
   };
 
-  const hasPlanStarted = () => {
-    const startDateStr = subscribedPlans[0]?.training_plans?.start_date;
-    if (!startDateStr || !validateDate(startDateStr)) {
-      console.error('Invalid start date:', startDateStr);
-      return false;
-    }
-
-    const startDate = new Date(startDateStr);
-    const today = new Date();
-    return today >= startDate;
-  };
-
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -892,90 +882,91 @@ export default function TrainingScreen() {
       </View>
     );
   }
-
-  if (!userProfile?.is_premium) {
-    console.log("User is not premium, showing subscription prompt");
-    return (
-      <View style={[styles.container, isDarkMode && styles.darkContainer]}>
-        <Text style={[styles.greeting, isDarkMode && styles.darkText]}>
-          {greeting}, {userProfile?.username || ''} 
-        </Text>
-        
-        <View style={[
-          styles.subscriptionCard, 
-          isDarkMode && styles.darkSubscriptionCard
-        ]}>
-          <Ionicons 
-            name="lock-closed" 
-            size={40} 
-            color={isDarkMode ? primaryColor : primaryColor} 
-            style={styles.lockIcon}
-          />
-          <Text style={[styles.subscriptionTitle, isDarkMode && styles.darkText]}>
-            Premium Treningsplan
+  if (userProfile?.role != 'coach') {
+    if (!userProfile?.is_premium) {
+      console.log("User is not premium, showing subscription prompt");
+      return (
+        <View style={[styles.container, isDarkMode && styles.darkContainer]}>
+          <Text style={[styles.greeting, isDarkMode && styles.darkText]}>
+            {greeting}, {userProfile?.username || ''} 
           </Text>
-          <Text style={[styles.subscriptionText, isDarkMode && styles.darkSubscriptionText]}>
-            Kjøp Premium for å få tilgang til skreddersydde treningsplaner og trenerstøtte.
-          </Text>
-          <Pressable 
-            style={[styles.subscribeButton, { backgroundColor: primaryColor }]}
-            onPress={() => router.push('/(settings)/subscription')}
-          >
-            <Text style={styles.subscribeButtonText}>Subscribe Now</Text>
-          </Pressable>
           
-          <Pressable 
-            style={[
-              styles.testButton, 
-              isDarkMode && styles.darkTestButton,
-              { borderColor: secondaryColor }
-            ]}
-            onPress={onSubscribe}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color={secondaryColor} />
-            ) : (
-              <Text style={[
-                styles.testButtonText, 
-                isDarkMode && styles.darkTestButtonText,
-                { color: secondaryColor }
-              ]}>
-                Test Premium (Dev Only)
+          <View style={[
+            styles.subscriptionCard, 
+            isDarkMode && styles.darkSubscriptionCard
+          ]}>
+            <Ionicons 
+              name="lock-closed" 
+              size={40} 
+              color={isDarkMode ? primaryColor : primaryColor} 
+              style={styles.lockIcon}
+            />
+            <Text style={[styles.subscriptionTitle, isDarkMode && styles.darkText]}>
+              Premium Treningsplan
+            </Text>
+            <Text style={[styles.subscriptionText, isDarkMode && styles.darkSubscriptionText]}>
+              Kjøp Premium for å få tilgang til skreddersydde treningsplaner og trenerstøtte.
+            </Text>
+            <Pressable 
+              style={[styles.subscribeButton, { backgroundColor: primaryColor }]}
+              onPress={() => router.push('/(settings)/subscription')}
+            >
+              <Text style={styles.subscribeButtonText}>Subscribe Now</Text>
+            </Pressable>
+            
+            <Pressable 
+              style={[
+                styles.testButton, 
+                isDarkMode && styles.darkTestButton,
+                { borderColor: secondaryColor }
+              ]}
+              onPress={onSubscribe}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color={secondaryColor} />
+              ) : (
+                <Text style={[
+                  styles.testButtonText, 
+                  isDarkMode && styles.darkTestButtonText,
+                  { color: secondaryColor }
+                ]}>
+                  Test Premium (Dev Only)
+                </Text>
+              )}
+            </Pressable>
+          </View>
+          
+          <Text style={[styles.featuresTitle, isDarkMode && styles.darkText]}>
+            Premium funksjoner
+          </Text>
+          
+          <View style={styles.featuresList}>
+            <View style={styles.featureItem}>
+              <Ionicons 
+                name="checkmark-circle" 
+                size={24} 
+                color={secondaryColor} 
+              />
+              <Text style={[styles.featureText, isDarkMode && styles.darkText]}>
+                Skreddersydde treningsplaner
               </Text>
-            )}
-          </Pressable>
-        </View>
-        
-        <Text style={[styles.featuresTitle, isDarkMode && styles.darkText]}>
-          Premium funksjoner
-        </Text>
-        
-        <View style={styles.featuresList}>
-          <View style={styles.featureItem}>
-            <Ionicons 
-              name="checkmark-circle" 
-              size={24} 
-              color={secondaryColor} 
-            />
-            <Text style={[styles.featureText, isDarkMode && styles.darkText]}>
-              Skreddersydde treningsplaner
-            </Text>
-          </View>
-          
-          <View style={styles.featureItem}>
-            <Ionicons 
-              name="checkmark-circle" 
-              size={24} 
-              color={secondaryColor} 
-            />
-            <Text style={[styles.featureText, isDarkMode && styles.darkText]}>
-              Raske svar fra trener
-            </Text>
+            </View>
+            
+            <View style={styles.featureItem}>
+              <Ionicons 
+                name="checkmark-circle" 
+                size={24} 
+                color={secondaryColor} 
+              />
+              <Text style={[styles.featureText, isDarkMode && styles.darkText]}>
+                Raske svar fra trener
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
-    );
+      );
+    }
   }
 
   if (userProfile?.role === 'coach') {
@@ -1040,14 +1031,6 @@ export default function TrainingScreen() {
   
   return (
     <View style={[styles.container, isDarkMode && styles.darkContainer]}>
-      {/* {userProfile?.role === 'coach' && (
-        <View style={styles.header}>
-          <Text style={[styles.title, isDarkMode && styles.darkText]}>Premium brukere</Text>
-          <TouchableOpacity onPress={() => setSearchVisible(true)}>
-            <Ionicons name="search" size={24} color={isDarkMode ? '#fff' : '#000'} />
-          </TouchableOpacity>
-        </View>
-      )} */}
       <Text style={[styles.greeting, isDarkMode && styles.darkText]}>
         {greeting}, {userProfile?.username || ''} 
       </Text>
@@ -1079,7 +1062,19 @@ export default function TrainingScreen() {
           </View>
         </View>
         <Text style={styles.planStartDate}>
-          {format(new Date(subscribedPlans[0]?.training_plans?.start_date), 'EEEE d. MMMM yyyy', { locale: nb })}
+          {subscribedPlans[0]?.training_plans?.start_date ? 
+            (() => {
+              try {
+                const date = new Date(subscribedPlans[0].training_plans.start_date);
+                if (isNaN(date.getTime())) return 'Ugyldig dato';
+                return format(date, 'EEEE d. MMMM yyyy', { locale: nb });
+              } catch (error) {
+                console.error('Error formatting start date:', error);
+                return 'Dato feil';
+              }
+            })() : 
+            'Dato ikke satt'
+          }
         </Text>
         <Text style={styles.planTiming}>
           {formatPlanTiming(
